@@ -28,6 +28,12 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.GregorianCalendar;
 import java.util.TimeZone;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
@@ -56,6 +62,7 @@ import com.amazonaws.services.ec2.model.DescribeImagesResult;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.DescribeKeyPairsResult;
 import com.amazonaws.services.ec2.model.Image;
+import com.amazonaws.services.ec2.model.Placement;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceState;
 import com.amazonaws.services.ec2.model.IpPermission;
@@ -67,6 +74,14 @@ import com.amazonaws.services.ec2.model.StartInstancesRequest;
 import com.amazonaws.services.ec2.model.StopInstancesRequest;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
+import com.amazonaws.services.ec2.model.AttachVolumeRequest;
+import com.amazonaws.services.ec2.model.CreateVolumeRequest;
+import com.amazonaws.services.ec2.model.CreateVolumeResult;
+import com.amazonaws.services.ec2.model.DetachVolumeRequest;
+import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.S3Object;
 
 public class awsStartup {
 
@@ -78,6 +93,7 @@ public class awsStartup {
      */
 
     static AmazonEC2      ec2;
+    static AmazonS3Client s3;
 
     public static void main(String[] args) throws Exception {
 
@@ -98,7 +114,8 @@ public class awsStartup {
 		   Date date = new Date();
 		   
 		  String keyName = "myKey" + dateFormat.format(date);
-		  String securityGroup = "JavaSecurityGroup" + dateFormat.format(date);
+		  //String securityGroup = "JavaSecurityGroup" + dateFormat.format(date);
+		  String securityGroup = "JavaSecurityGroup";
 		  String machineName = "Instance" + dateFormat.format(date);
          
        
@@ -113,16 +130,20 @@ public class awsStartup {
             DescribeAvailabilityZonesResult availabilityZonesResult = ec2.describeAvailabilityZones();
             System.out.println("You have access to " + availabilityZonesResult.getAvailabilityZones().size() +
                     " Availability Zones.");
-
+            Placement placement = new Placement();
+            placement.setAvailabilityZone("us-east-1a");
+             
+            
+            
             /*********************************************
              * 
              *  #3 Describe Available Images
              *  
              *********************************************/
-            System.out.println("#3 Describe Available Images");
-            DescribeImagesResult dir = ec2.describeImages();
-            List<Image> images = dir.getImages();
-            System.out.println("You have " + images.size() + " Amazon images");
+            //System.out.println("#3 Describe Available Images");
+            //DescribeImagesResult dir = ec2.describeImages();
+            //List<Image> images = dir.getImages();
+            //System.out.println("You have " + images.size() + " Amazon images");
             
             
             /*********************************************
@@ -166,15 +187,15 @@ public class awsStartup {
              *  
              *********************************************/
             System.out.println("#5 Create a Key Pairs");
-            CreateKeyPairRequest newKeyRequest = new CreateKeyPairRequest();
-            newKeyRequest.setKeyName(keyName);
-            CreateKeyPairResult keyresult = ec2.createKeyPair(newKeyRequest);
+            //CreateKeyPairRequest newKeyRequest = new CreateKeyPairRequest();
+            //newKeyRequest.setKeyName(keyName);
+            //CreateKeyPairResult keyresult = ec2.createKeyPair(newKeyRequest);
             
-            KeyPair keyPair = new KeyPair();
-            keyPair = keyresult.getKeyPair();
-            String privateKey = keyPair.getKeyMaterial();
+            //KeyPair keyPair = new KeyPair();
+            //keyPair = keyresult.getKeyPair();
+            //String privateKey = keyPair.getKeyMaterial();
             
-            System.out.println("The key is = " + keyPair.toString());
+            //System.out.println("The key is = " + keyPair.toString());
             
                         
             /*********************************************
@@ -182,15 +203,18 @@ public class awsStartup {
              *  #6 Create a Security Group
              *  
              *********************************************/
-            
+            /*
             CreateSecurityGroupRequest createSecurityGroupRequest = 
             		new CreateSecurityGroupRequest();
-            	        	
+            
+            
+            
             createSecurityGroupRequest.withGroupName(securityGroup)
             		.withDescription("My Java Security Group");
             	
             CreateSecurityGroupResult createSecurityGroupResult = 
             		ec2.createSecurityGroup(createSecurityGroupRequest);
+          
             
             //SSH
             IpPermission ipPermission1 = new IpPermission();
@@ -233,19 +257,24 @@ public class awsStartup {
         	
         	List<String> securityGroups = new ArrayList<String>();
         	securityGroups.add(securityGroup);
+        	*/
+        	List<String> securityGroups = new ArrayList<String>();
+        	securityGroups.add("JavaSecurityGroup");
             
             /*********************************************
              * 
              *  #6 Create an Instance
              *  
              *********************************************/
+        	
             System.out.println("#6 Create an Instance");
             String imageId = "ami-76f0061f"; //Basic 32-bit Amazon Linux AMI
             int minInstanceCount = 1; // create 1 instance
             int maxInstanceCount = 1;
             RunInstancesRequest rir = new RunInstancesRequest(imageId, minInstanceCount, maxInstanceCount);
-            rir.setKeyName(keyName);
+            rir.setKeyName("my_key");
             rir.setSecurityGroups(securityGroups);
+            rir.setPlacement(placement);
             RunInstancesResult result = ec2.runInstances(rir);
             
             //get instanceId from the result
@@ -283,15 +312,10 @@ public class awsStartup {
             	// instance state
             	InstanceState is = ins.getState();
             	
-//            	while (is.getName().equals("pending")){
-//            		System.out.println(instanceId+" is "+is.getName());
-//                	System.out.println("Going to sleep for 30 seconds");
-//                    Thread.sleep(30000);
-//                    System.out.println("Awake");
-//                    is = ins.getState();
-//            	}
-            	if(is.getName().equals("pending")){
-            		Thread.sleep(55000);
+            	while (is.getName().equals("pending")){
+            		Thread.sleep(30000);
+            		ins = getInstance(createdInstanceId);
+            		is = ins.getState();
             	}
             	
             	System.out.println(instanceId+" "+is.getName());
@@ -302,7 +326,7 @@ public class awsStartup {
             }
             
             
-           
+            
             
             /*********************************************
              * 
@@ -320,6 +344,146 @@ public class awsStartup {
             CreateTagsRequest ctr = new CreateTagsRequest(resources, tags);
             ec2.createTags(ctr);
             
+            
+            // we assume that we've already created an instance. Use the id of the instance.
+         	String instanceId = createdInstanceId; //put your own instance id to test this code.
+            
+        	/*********************************************
+             *  #2.1 Create a volume
+             *********************************************/
+          	//create a volume
+         	CreateVolumeRequest cvr = new CreateVolumeRequest();
+ 	        cvr.setAvailabilityZone("us-east-1a");
+ 	        cvr.setSize(10); //size = 10 gigabytes
+         	CreateVolumeResult volumeResult = ec2.createVolume(cvr);
+         	String createdVolumeId = volumeResult.getVolume().getVolumeId();
+          	
+         	
+         	/*********************************************
+             *  #2.2 Attach the volume to the instance
+             *********************************************/
+         	AttachVolumeRequest avr = new AttachVolumeRequest();
+         	avr.setVolumeId(createdVolumeId);
+         	avr.setInstanceId(instanceId);
+         	avr.setDevice("/dev/sdf");
+         	ec2.attachVolume(avr);
+         	
+         	/*********************************************
+             *  #2.3 Detach the volume from the instance
+             *********************************************/
+         	//DetachVolumeRequest dvr = new DetachVolumeRequest();
+         	//dvr.setVolumeId(createdVolumeId);
+         	//dvr.setInstanceId(instanceId);
+         	//ec2.detachVolume(dvr);
+         	
+         	
+             /************************************************
+             *    #3 S3 bucket and object
+             ***************************************************/
+             s3  = new AmazonS3Client(credentials);
+             
+             //create bucket
+             String bucketName = "cloudsampleewg09";
+             s3.createBucket(bucketName);
+             
+             //set key
+             String key = "object-name.txt";
+             
+             //set value
+             File file = File.createTempFile("temp", ".txt");
+             //file.deleteOnExit();
+             Writer writer = new OutputStreamWriter(new FileOutputStream(file));
+             writer.write("This is a sample sentence.\r\nYes!");
+             writer.close();
+             
+             //put object - bucket, key, value(file)
+             s3.putObject(new PutObjectRequest(bucketName, key, file));
+             
+             //get object
+             S3Object object = s3.getObject(new GetObjectRequest(bucketName, key));
+             BufferedReader reader = new BufferedReader(
+             	    new InputStreamReader(object.getObjectContent()));
+             String dataS3 = null;
+             while ((dataS3 = reader.readLine()) != null) {
+                 System.out.println(dataS3);
+             }
+            
+                       
+        	/*********************************************
+ 			*  	#8 Allocate elastic IP addresses.
+ 			*********************************************/
+            
+          
+ 			
+ 			//allocate
+ 			AllocateAddressResult elasticResult = ec2.allocateAddress();
+ 			String elasticIp = elasticResult.getPublicIp();
+ 			System.out.println("New elastic IP: "+elasticIp);
+ 				
+ 			//associate
+ 			AssociateAddressRequest aar = new AssociateAddressRequest();
+ 			aar.setInstanceId(instanceId);
+ 			aar.setPublicIp(elasticIp);
+ 			ec2.associateAddress(aar);
+ 			
+ 			//disassociate
+ 			//DisassociateAddressRequest dar = new DisassociateAddressRequest();
+ 			//dar.setPublicIp(elasticIp);
+ 			//ec2.disassociateAddress(dar);
+             
+         	
+ 			/***********************************
+ 			 *   #9 Monitoring (CloudWatch)
+ 			 *********************************/
+ 			
+ 			//create CloudWatch client
+ 			AmazonCloudWatchClient cloudWatch = new AmazonCloudWatchClient(credentials) ;
+ 			
+ 			//create request message
+ 			GetMetricStatisticsRequest statRequest = new GetMetricStatisticsRequest();
+ 			
+ 			//set up request message
+ 			statRequest.setNamespace("AWS/EC2"); //namespace
+ 			statRequest.setPeriod(60); //period of data
+ 			ArrayList<String> stats = new ArrayList<String>();
+ 			
+ 			//Use one of these strings: Average, Maximum, Minimum, SampleCount, Sum 
+ 			stats.add("Average"); 
+ 			stats.add("Sum");
+ 			statRequest.setStatistics(stats);
+ 			
+ 			//Use one of these strings: CPUUtilization, NetworkIn, NetworkOut, DiskReadBytes, DiskWriteBytes, DiskReadOperations  
+ 			statRequest.setMetricName("CPUUtilization"); 
+ 			
+ 			// set time
+ 			GregorianCalendar calendar = new GregorianCalendar(TimeZone.getTimeZone("UTC"));
+ 			calendar.add(GregorianCalendar.SECOND, -1 * calendar.get(GregorianCalendar.SECOND)); // 1 second ago
+ 			Date endTime = calendar.getTime();
+ 			calendar.add(GregorianCalendar.MINUTE, -10); // 10 minutes ago
+ 			Date startTime = calendar.getTime();
+ 			statRequest.setStartTime(startTime);
+ 			statRequest.setEndTime(endTime);
+ 			
+ 			//specify an instance
+ 			ArrayList<Dimension> dimensions = new ArrayList<Dimension>();
+ 			dimensions.add(new Dimension().withName("InstanceId").withValue(instanceId));
+ 			statRequest.setDimensions(dimensions);
+ 			
+ 			//get statistics
+ 			GetMetricStatisticsResult statResult = cloudWatch.getMetricStatistics(statRequest);
+ 			
+ 			//display
+ 			System.out.println(statResult.toString());
+ 			List<Datapoint> dataList = statResult.getDatapoints();
+ 			Double averageCPU = null;
+ 			Date timeStamp = null;
+ 			for (Datapoint data : dataList){
+ 				averageCPU = data.getAverage();
+ 				timeStamp = data.getTimestamp();
+ 				System.out.println("Average CPU utlilization for last 10 minutes: "+averageCPU);
+ 				System.out.println("Total CPU utlilization for last 10 minutes: "+data.getSum());
+ 			}
+                 
             
                         
             /*********************************************
@@ -349,93 +513,7 @@ public class awsStartup {
             TerminateInstancesRequest tir = new TerminateInstancesRequest(instanceIds);
             //ec2.terminateInstances(tir);
             
-         // we assume that we've already created an instance. Use the id of the instance.
-     		String instanceId = createdInstanceId; //put your own instance id to test this code.
-     		
-     		try{
-      			
-     			/*********************************************
-     			*  	#2 Allocate elastic IP addresses.
-     			*********************************************/
-     			
-     			//allocate
-     			AllocateAddressResult elasticResult = ec2.allocateAddress();
-     			String elasticIp = elasticResult.getPublicIp();
-     			System.out.println("New elastic IP: "+elasticIp);
-     				
-     			//associate
-     			AssociateAddressRequest aar = new AssociateAddressRequest();
-     			aar.setInstanceId(instanceId);
-     			aar.setPublicIp(elasticIp);
-     			ec2.associateAddress(aar);
-     			
-     			//disassociate
-     			DisassociateAddressRequest dar = new DisassociateAddressRequest();
-     			dar.setPublicIp(elasticIp);
-     			ec2.disassociateAddress(dar);
-                 
-             	
-     			/***********************************
-     			 *   #3 Monitoring (CloudWatch)
-     			 *********************************/
-     			
-     			//create CloudWatch client
-     			AmazonCloudWatchClient cloudWatch = new AmazonCloudWatchClient(credentials) ;
-     			
-     			//create request message
-     			GetMetricStatisticsRequest statRequest = new GetMetricStatisticsRequest();
-     			
-     			//set up request message
-     			statRequest.setNamespace("AWS/EC2"); //namespace
-     			statRequest.setPeriod(60); //period of data
-     			ArrayList<String> stats = new ArrayList<String>();
-     			
-     			//Use one of these strings: Average, Maximum, Minimum, SampleCount, Sum 
-     			stats.add("Average"); 
-     			stats.add("Sum");
-     			statRequest.setStatistics(stats);
-     			
-     			//Use one of these strings: CPUUtilization, NetworkIn, NetworkOut, DiskReadBytes, DiskWriteBytes, DiskReadOperations  
-     			statRequest.setMetricName("CPUUtilization"); 
-     			
-     			// set time
-     			GregorianCalendar calendar = new GregorianCalendar(TimeZone.getTimeZone("UTC"));
-     			calendar.add(GregorianCalendar.SECOND, -1 * calendar.get(GregorianCalendar.SECOND)); // 1 second ago
-     			Date endTime = calendar.getTime();
-     			calendar.add(GregorianCalendar.MINUTE, -10); // 10 minutes ago
-     			Date startTime = calendar.getTime();
-     			statRequest.setStartTime(startTime);
-     			statRequest.setEndTime(endTime);
-     			
-     			//specify an instance
-     			ArrayList<Dimension> dimensions = new ArrayList<Dimension>();
-     			dimensions.add(new Dimension().withName("InstanceId").withValue(instanceId));
-     			statRequest.setDimensions(dimensions);
-     			
-     			//get statistics
-     			GetMetricStatisticsResult statResult = cloudWatch.getMetricStatistics(statRequest);
-     			
-     			//display
-     			System.out.println(statResult.toString());
-     			List<Datapoint> dataList = statResult.getDatapoints();
-     			Double averageCPU = null;
-     			Date timeStamp = null;
-     			for (Datapoint data : dataList){
-     				averageCPU = data.getAverage();
-     				timeStamp = data.getTimestamp();
-     				System.out.println("Average CPU utlilization for last 10 minutes: "+averageCPU);
-     				System.out.println("Total CPU utlilization for last 10 minutes: "+data.getSum());
-     			}
-                 
-                 
-                 
-     		} catch (AmazonServiceException ase) {
-     		    System.out.println("Caught Exception: " + ase.getMessage());
-     		    System.out.println("Reponse Status Code: " + ase.getStatusCode());
-     		    System.out.println("Error Code: " + ase.getErrorCode());
-     		    System.out.println("Request ID: " + ase.getRequestId());
-     		}
-     		
+            		    		
             /*********************************************
              *  
              *  #10 shutdown client object
@@ -454,10 +532,31 @@ public class awsStartup {
         }
         
         
-     
-     	        
-     	}
+    }
 
+    
+    public static Instance getInstance(String id){
+    	
+        DescribeInstancesResult describeInstancesRequest = ec2.describeInstances();
+        List<Reservation> reservations = describeInstancesRequest.getReservations();
+        Set<Instance> instances = new HashSet<Instance>();
+        // add all instances to a Set.
+        for (Reservation reservation : reservations) {
+        	instances.addAll(reservation.getInstances());
+        }
+        
+                
+        for ( Instance ins : instances){
+           	if ( id.equalsIgnoreCase(ins.getInstanceId()) == true ){
+        		return ins;
+        	}
+        }
+        
+        return null;
+        
+        
+            	
+    }
         
     
 }

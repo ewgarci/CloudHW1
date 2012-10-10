@@ -1,0 +1,35 @@
+#include <math.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+float calculate (float a, float b, float c);
+
+int main(void)
+{
+	float a = 15.456;
+	float b = 582.56;
+	float c = 0.36142;
+	float d;
+	while(1){
+		
+		d = calculate(a, b, c);
+		c = d/3958.492;
+		a++;
+		printf(" d = %f ", d);
+	}
+				
+return 0;
+
+}
+
+float calculate (float a, float b, float c){
+
+	float result= 89.2;
+	int i;
+	for (i=1; i < 20; i++)
+	{
+    		result = a*b*c*i*result;
+	}
+
+return result;
+}
