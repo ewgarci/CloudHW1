@@ -94,7 +94,8 @@ public class awsStartup {
 
     static AmazonEC2      ec2;
     static AmazonS3Client s3;
-
+    
+    //Test commit comment
     public static void main(String[] args) throws Exception {
 
 
