@@ -28,7 +28,7 @@ public class cloudWatch {
 	    			 	awsStartup.class.getResourceAsStream("AwsCredentials.properties"));
 	    
 	    	// we assume that we've already created an instance. Use the id of the instance.
-	         	String instanceId = "i-2eefa353"; //put your own instance id to test this code.
+	         	String instanceId = "i-fc2c6681"; //put your own instance id to test this code.
 	         	
 	    	 /***********************************
 	 			 *   #9 Monitoring (CloudWatch)
@@ -78,8 +78,8 @@ public class cloudWatch {
 	 			for (Datapoint data : dataList){
 	 				averageCPU = data.getAverage();
 	 				timeStamp = data.getTimestamp();
-	 				System.out.println("Average CPU utlilization for last 10 minutes: "+averageCPU);
-	 				System.out.println("Total CPU utlilization for last 10 minutes: "+data.getSum());
+	 				System.out.println("Average CPU utlilization for last 10 minutes since " +timeStamp.toString() + ": " +averageCPU);
+	 				System.out.println("Total CPU utlilization for last 10 minutes since "+timeStamp.toString() + ": " + data.getSum());
 	 			}
 	    }
 }

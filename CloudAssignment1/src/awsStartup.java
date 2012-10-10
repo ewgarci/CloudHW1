@@ -46,38 +46,38 @@ import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 import com.amazonaws.services.ec2.model.AllocateAddressResult;
 import com.amazonaws.services.ec2.model.AssociateAddressRequest;
-import com.amazonaws.services.ec2.model.DisassociateAddressRequest;
+//import com.amazonaws.services.ec2.model.DisassociateAddressRequest;
 
 
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2Client;
-import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressRequest;
-import com.amazonaws.services.ec2.model.CreateKeyPairRequest;
-import com.amazonaws.services.ec2.model.CreateKeyPairResult;
-import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
-import com.amazonaws.services.ec2.model.CreateSecurityGroupResult;
+//import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressRequest;
+//import com.amazonaws.services.ec2.model.CreateKeyPairRequest;
+//import com.amazonaws.services.ec2.model.CreateKeyPairResult;
+//import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
+//import com.amazonaws.services.ec2.model.CreateSecurityGroupResult;
 import com.amazonaws.services.ec2.model.CreateTagsRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
-import com.amazonaws.services.ec2.model.DescribeImagesResult;
+//import com.amazonaws.services.ec2.model.DescribeImagesResult;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.DescribeKeyPairsResult;
-import com.amazonaws.services.ec2.model.Image;
+//import com.amazonaws.services.ec2.model.Image;
 import com.amazonaws.services.ec2.model.Placement;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceState;
-import com.amazonaws.services.ec2.model.IpPermission;
-import com.amazonaws.services.ec2.model.KeyPair;
+//import com.amazonaws.services.ec2.model.IpPermission;
+//import com.amazonaws.services.ec2.model.KeyPair;
 import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
-import com.amazonaws.services.ec2.model.StartInstancesRequest;
-import com.amazonaws.services.ec2.model.StopInstancesRequest;
+//import com.amazonaws.services.ec2.model.StartInstancesRequest;
+//import com.amazonaws.services.ec2.model.StopInstancesRequest;
 import com.amazonaws.services.ec2.model.Tag;
-import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
+//import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.AttachVolumeRequest;
 import com.amazonaws.services.ec2.model.CreateVolumeRequest;
 import com.amazonaws.services.ec2.model.CreateVolumeResult;
-import com.amazonaws.services.ec2.model.DetachVolumeRequest;
+//import com.amazonaws.services.ec2.model.DetachVolumeRequest;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.PutObjectRequest;
@@ -113,9 +113,9 @@ public class awsStartup {
 		   //get current date time with Date()
 		   Date date = new Date();
 		   
-		  String keyName = "myKey" + dateFormat.format(date);
+		  //String keyName = "myKey" + dateFormat.format(date);
 		  //String securityGroup = "JavaSecurityGroup" + dateFormat.format(date);
-		  String securityGroup = "JavaSecurityGroup";
+		  //String securityGroup = "JavaSecurityGroup";
 		  String machineName = "Instance" + dateFormat.format(date);
          
        
@@ -186,7 +186,7 @@ public class awsStartup {
              *  #6 Create a Key Pair
              *  
              *********************************************/
-            System.out.println("#5 Create a Key Pairs");
+            //System.out.println("#5 Create a Key Pairs");
             //CreateKeyPairRequest newKeyRequest = new CreateKeyPairRequest();
             //newKeyRequest.setKeyName(keyName);
             //CreateKeyPairResult keyresult = ec2.createKeyPair(newKeyRequest);
@@ -480,8 +480,8 @@ public class awsStartup {
  			for (Datapoint data : dataList){
  				averageCPU = data.getAverage();
  				timeStamp = data.getTimestamp();
- 				System.out.println("Average CPU utlilization for last 10 minutes: "+averageCPU);
- 				System.out.println("Total CPU utlilization for last 10 minutes: "+data.getSum());
+ 				System.out.println("Average CPU utlilization for last 10 minutes since " +timeStamp.toString() + ": " +averageCPU);
+ 				System.out.println("Total CPU utlilization for last 10 minutes since "+timeStamp.toString() + ": " + data.getSum());
  			}
                  
             
@@ -491,16 +491,16 @@ public class awsStartup {
              *  #8 Stop/Start an Instance
              *  
              *********************************************/
-            System.out.println("#8 Stop the Instance");
-            List<String> instanceIds = new LinkedList<String>();
-            instanceIds.add(createdInstanceId);
+            //System.out.println("#8 Stop the Instance");
+            //List<String> instanceIds = new LinkedList<String>();
+            //instanceIds.add(createdInstanceId);
             
             //stop
-            StopInstancesRequest stopIR = new StopInstancesRequest(instanceIds);
+            //StopInstancesRequest stopIR = new StopInstancesRequest(instanceIds);
             //ec2.stopInstances(stopIR);
             
             //start
-            StartInstancesRequest startIR = new StartInstancesRequest(instanceIds);
+            //StartInstancesRequest startIR = new StartInstancesRequest(instanceIds);
             //ec2.startInstances(startIR);
             
             
@@ -509,8 +509,8 @@ public class awsStartup {
              *  #9 Terminate an Instance
              *  
              *********************************************/
-            System.out.println("#9 Terminate the Instance");
-            TerminateInstancesRequest tir = new TerminateInstancesRequest(instanceIds);
+            //System.out.println("#9 Terminate the Instance");
+            //TerminateInstancesRequest tir = new TerminateInstancesRequest(instanceIds);
             //ec2.terminateInstances(tir);
             
             		    		
