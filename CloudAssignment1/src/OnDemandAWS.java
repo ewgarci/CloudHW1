@@ -75,22 +75,26 @@ public class OnDemandAWS {
 	private String zone;
 	private String imageId ;	
 	
+	
+	
 	public OnDemandAWS(String keyName, String securityGroup, String zone, String imageId, String machineName) throws IOException{
 		
 		credentials = new PropertiesCredentials(
 			 	awsStartup.class.getResourceAsStream("AwsCredentials.properties"));
 		
-		try {
-			
-			//ec2 = new AmazonEC2Client(credentials);
-			//s3  = new AmazonS3Client(credentials);
-			
-			
-			keyName = this.keyName;
-			securityGroup = this.securityGroup;
-			zone = this.zone;
-			imageId= this.imageId;
-			
+		ec2 = new AmazonEC2Client(credentials);
+		s3  = new AmazonS3Client(credentials);		
+		
+		keyName = this.keyName;
+		securityGroup = this.securityGroup;
+		zone = this.zone;
+		imageId= this.imageId;
+
+		
+	}
+	
+	public void createInstance() {
+		try {			
 						
 			Placement placement = new Placement();
             placement.setAvailabilityZone(zone);
@@ -112,9 +116,7 @@ public class OnDemandAWS {
             for (Instance ins : resultInstance){
             	instanceId = ins.getInstanceId();
             	System.out.println("New instance has been created: "+ins.getInstanceId());
-            }
-            
-            
+            }        
            
 			
 		} catch (AmazonServiceException ase) {
@@ -123,7 +125,6 @@ public class OnDemandAWS {
             System.out.println("Error Code: " + ase.getErrorCode());
             System.out.println("Request ID: " + ase.getRequestId());
 		}
-		
 		
 		
 	}
@@ -190,40 +191,11 @@ public class OnDemandAWS {
 		
 	}
 	
-	public void attachS3(){
-		
+	public void attachS3(){		
 	}
 	
-	public void saveSnapShot(){
-		
-	}
-	
-	
-	/*
-	private static void createKey(String keyName){
-		try {
-		    CreateKeyPairRequest newKeyRequest = new CreateKeyPairRequest();
-		    newKeyRequest.setKeyName(keyName);
-		    CreateKeyPairResult keyresult = ec2.createKeyPair(newKeyRequest);
-		    KeyPair keyPair = new KeyPair();
-		    keyPair = keyresult.getKeyPair();
-		    String privateKey = keyPair.getKeyMaterial();
-		    writeKeytoFile(keyPath, privateKey);
-		    
-		} catch (AmazonServiceException ase) {
-            System.out.println("Caught Exception: " + ase.getMessage());
-            System.out.println("Reponse Status Code: " + ase.getStatusCode());
-            System.out.println("Error Code: " + ase.getErrorCode());
-            System.out.println("Request ID: " + ase.getRequestId());
-		}
-	}
-	
-	private static void writeKeytoFile(String path, String privateKey){
-		
-		
-		
-	}
-	*/
-	
-	
+	//Peter
+	public String saveSnapShot() {
+		return "";
+	}	
 }
