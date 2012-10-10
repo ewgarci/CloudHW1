@@ -12,6 +12,7 @@ import java.util.TimeZone;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
@@ -67,22 +68,39 @@ import com.amazonaws.services.s3.model.S3Object;
 
 
 public class Admin {
-
-	OnDemandAWS bob = new OnDemandAWS("String keyName", "String securityGroup", "String zone", "String imageId", "String machineName");
-	public void main() {
+	
 		
+	public static void main(String[] args) throws IOException {
 		
+	    AWSCredentials credentials = new PropertiesCredentials(
+		awsStartup.class.getResourceAsStream("AwsCredentials.properties"));
+	    AmazonEC2 ec2 = new AmazonEC2Client(credentials);
+	    AmazonS3Client s3  = new AmazonS3Client(credentials);
+	    
+	     String securityGroup = "WorkSecurity";
+		 String keyName = "my_key";
+		 //String keyPath = "c://";
+		 String zone = "us-east-1a";
+		 String imageId = "ami-76f0061f";
+	    
+	    createSecurityGroup(ec2);
+	    createKey(keyName, ec2);
+	    
+	    
+	    
+	    OnDemandAWS bob = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC");
+	    OnDemandAWS alice = new OnDemandAWS(keyName, securityGroup, zone, imageId, "alice-PC");
 		
 	}
 	
-	private void createKey(String keyName){
+	private static void createKey(String keyName, AmazonEC2 ec2){
 		try {
 		    CreateKeyPairRequest newKeyRequest = new CreateKeyPairRequest();
 		    newKeyRequest.setKeyName(keyName);
 		    CreateKeyPairResult keyresult = ec2.createKeyPair(newKeyRequest);
 		    KeyPair keyPair = new KeyPair();
 		    keyPair = keyresult.getKeyPair();
-		    String privateKey = keyPair.getKeyMaterial();
+		    //String privateKey = keyPair.getKeyMaterial();
 		    //writeKeytoFile(keyPath, privateKey);
 		    
 		} catch (AmazonServiceException ase) {
@@ -98,18 +116,65 @@ public class Admin {
 	}
 	
 	// Setup the CloudWatch client and setup the metrics that we want to get
-	private void setupCloudWatch() {
+	public void setupCloudWatch() {
 	}
 	
-	private void getCPUUsage(String instanceId){	
+	public void getCPUUsage(String instanceId){	
 	}
 	
-	//creates elastic IP
-	private void getElasticIP() {
-	}
 	
-	//creates EBS Volume
-	private void getEBSVolume() {
-	}
 	
+	public static void createSecurityGroup(AmazonEC2 ec2){
+		
+		CreateSecurityGroupRequest createSecurityGroupRequest = 
+				new CreateSecurityGroupRequest();
+		
+		
+		
+		createSecurityGroupRequest.withGroupName("My Java Security Group")
+				.withDescription("My Java Security Group");
+		    	
+		    CreateSecurityGroupResult createSecurityGroupResult = 
+		    		ec2.createSecurityGroup(createSecurityGroupRequest);
+		  
+		    
+		    //SSH
+		IpPermission ipPermission1 = new IpPermission();
+		ipPermission1.withIpRanges("0.0.0.0/0")
+		            .withIpProtocol("tcp")
+		            .withFromPort(22)
+		            .withToPort(22);
+		//http
+		IpPermission ipPermission2 = new IpPermission();
+		ipPermission2.withIpRanges("0.0.0.0/0")
+		            .withIpProtocol("tcp")
+		            .withFromPort(80)
+		            .withToPort(80);
+		//https
+		IpPermission ipPermission3 = new IpPermission();
+		ipPermission3.withIpRanges("0.0.0.0/0")
+		            .withIpProtocol("tcp")
+		            .withFromPort(443)
+		            .withToPort(443);
+		//tcp
+		IpPermission ipPermission4 = new IpPermission();
+		ipPermission4.withIpRanges("0.0.0.0/0")
+		            .withIpProtocol("tcp")
+		            .withFromPort(65535)
+		            .withToPort(65535);
+		
+		List<IpPermission> permissions = new ArrayList<IpPermission>();
+		permissions.add(ipPermission1);
+		permissions.add(ipPermission2);
+		permissions.add(ipPermission3);
+		permissions.add(ipPermission4);
+		
+		AuthorizeSecurityGroupIngressRequest authorizeSecurityGroupIngressRequest =
+				new AuthorizeSecurityGroupIngressRequest();
+			    	
+		authorizeSecurityGroupIngressRequest.withGroupName("My Java Security Group")
+		                                    .withIpPermissions(permissions);
+			        
+		ec2.authorizeSecurityGroupIngress(authorizeSecurityGroupIngressRequest);
+	}
 }

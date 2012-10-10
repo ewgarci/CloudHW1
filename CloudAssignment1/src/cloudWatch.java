@@ -61,15 +61,15 @@ public class cloudWatch {
 	 			Date startTime = calendar.getTime();
 	 			statRequest.setStartTime(startTime);
 	 			statRequest.setEndTime(endTime);
-	 			
+
 	 			//specify an instance
 	 			ArrayList<Dimension> dimensions = new ArrayList<Dimension>();
 	 			dimensions.add(new Dimension().withName("InstanceId").withValue(instanceId));
 	 			statRequest.setDimensions(dimensions);
-	 			
+
 	 			//get statistics
 	 			GetMetricStatisticsResult statResult = cloudWatch.getMetricStatistics(statRequest);
-	 			
+
 	 			//display
 	 			System.out.println(statResult.toString());
 	 			List<Datapoint> dataList = statResult.getDatapoints();
