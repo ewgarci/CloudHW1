@@ -64,16 +64,15 @@ import com.amazonaws.services.s3.model.S3Object;
 	
 public class OnDemandAWS {
 	
-	private AmazonEC2 ec2;
-    private AmazonS3Client s3;
-    private AWSCredentials credentials;
-    private String instanceId;
-    private String keyName;
-	private String securityGroup;
-	private String machineName;
-	private static String keyPath;
-	private String zone;
-	private String imageId ;	
+	AmazonEC2 ec2;
+	AmazonS3Client s3;
+	AWSCredentials credentials;
+	String instanceId;
+	String keyName;
+	String securityGroup;
+	String machineName;
+	String zone;
+	String imageId;	
 	
 	
 	
@@ -85,10 +84,11 @@ public class OnDemandAWS {
 		ec2 = new AmazonEC2Client(credentials);
 		s3  = new AmazonS3Client(credentials);		
 		
-		keyName = this.keyName;
-		securityGroup = this.securityGroup;
-		zone = this.zone;
-		imageId= this.imageId;
+		this.keyName = keyName;
+		this.securityGroup = securityGroup;
+		this.zone = zone;
+		this.imageId= imageId;
+		this.machineName= machineName;
 
 		
 	}

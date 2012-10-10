@@ -91,8 +91,6 @@ public class Admin {
 		createSecurityGroup(ec2, securityGroup);
 		createKey(keyName, ec2);
 
-
-
 		OnDemandAWS bob = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC");
 		OnDemandAWS alice = new OnDemandAWS(keyName, securityGroup, zone, imageId, "alice-PC");
 
@@ -180,7 +178,7 @@ public class Admin {
 		AuthorizeSecurityGroupIngressRequest authorizeSecurityGroupIngressRequest =
 				new AuthorizeSecurityGroupIngressRequest();
 			    	
-		authorizeSecurityGroupIngressRequest.withGroupName("My Java Security Group")
+		authorizeSecurityGroupIngressRequest.withGroupName(securityGroup)
 		                                    .withIpPermissions(permissions);
 			        
 		ec2.authorizeSecurityGroupIngress(authorizeSecurityGroupIngressRequest);
