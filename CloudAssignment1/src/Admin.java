@@ -71,26 +71,34 @@ public class Admin {
 	
 		
 	public static void main(String[] args) throws IOException {
-		
-	    AWSCredentials credentials = new PropertiesCredentials(
-		awsStartup.class.getResourceAsStream("AwsCredentials.properties"));
-	    AmazonEC2 ec2 = new AmazonEC2Client(credentials);
-	    AmazonS3Client s3  = new AmazonS3Client(credentials);
-	    
-	     String securityGroup = "WorkSecurity";
-		 String keyName = "my_key";
-		 //String keyPath = "c://";
-		 String zone = "us-east-1a";
-		 String imageId = "ami-76f0061f";
-	    
-	    createSecurityGroup(ec2);
-	    createKey(keyName, ec2);
-	    
-	    
-	    
-	    OnDemandAWS bob = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC");
-	    OnDemandAWS alice = new OnDemandAWS(keyName, securityGroup, zone, imageId, "alice-PC");
-		
+
+		AWSCredentials credentials = new PropertiesCredentials(
+				awsStartup.class.getResourceAsStream("AwsCredentials.properties"));
+		AmazonEC2 ec2 = new AmazonEC2Client(credentials);
+		AmazonS3Client s3  = new AmazonS3Client(credentials);
+
+		DateFormat dateFormat = new SimpleDateFormat("_MMddyy_HHmmss");
+		//get current date time with Date()
+		Date date = new Date();
+
+
+		String securityGroup = "WorkSecurity" + dateFormat.format(date);
+		String keyName = "my_key" + dateFormat.format(date);
+		//String keyPath = "c://";
+		String zone = "us-east-1a";
+		String imageId = "ami-76f0061f";
+
+		createSecurityGroup(ec2, securityGroup);
+		createKey(keyName, ec2);
+
+
+
+		OnDemandAWS bob = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC");
+		OnDemandAWS alice = new OnDemandAWS(keyName, securityGroup, zone, imageId, "alice-PC");
+
+		bob.createInstance();
+		alice.createInstance();
+
 	}
 	
 	private static void createKey(String keyName, AmazonEC2 ec2){
@@ -98,8 +106,8 @@ public class Admin {
 		    CreateKeyPairRequest newKeyRequest = new CreateKeyPairRequest();
 		    newKeyRequest.setKeyName(keyName);
 		    CreateKeyPairResult keyresult = ec2.createKeyPair(newKeyRequest);
-		    KeyPair keyPair = new KeyPair();
-		    keyPair = keyresult.getKeyPair();
+		    //KeyPair keyPair = new KeyPair();
+		    //keyPair = keyresult.getKeyPair();
 		    //String privateKey = keyPair.getKeyMaterial();
 		    //writeKeytoFile(keyPath, privateKey);
 		    
@@ -124,14 +132,14 @@ public class Admin {
 	
 	
 	
-	public static void createSecurityGroup(AmazonEC2 ec2){
+	public static void createSecurityGroup(AmazonEC2 ec2, String securityGroup){
 		
 		CreateSecurityGroupRequest createSecurityGroupRequest = 
 				new CreateSecurityGroupRequest();
 		
 		
 		
-		createSecurityGroupRequest.withGroupName("My Java Security Group")
+		createSecurityGroupRequest.withGroupName(securityGroup)
 				.withDescription("My Java Security Group");
 		    	
 		    CreateSecurityGroupResult createSecurityGroupResult = 
