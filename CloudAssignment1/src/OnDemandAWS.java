@@ -145,7 +145,13 @@ public class OnDemandAWS {
         		is = this.getInstance().getState();
         	}
             
-            this.createElasticIp();
+            if (this.ipAddress == null){
+            	this.createElasticIp();
+            }
+            
+            
+            this.assignElasticIp();
+            
             
             System.out.println(machineName + " id = " + this.instanceId + " ip = " + this.ipAddress);
            
@@ -180,20 +186,15 @@ public class OnDemandAWS {
         return null;
         
     }
-	
-	
-	//public String getPublicDNS(){
-    	                	
-    //}
-    
+	    
 	
 	public void createElasticIp(){
 		AllocateAddressResult elasticResult = ec2.allocateAddress();
 		String elasticIp = elasticResult.getPublicIp();
 		this.ipAddress = elasticIp;
-		System.out.println(this.ipAddress); 
-		System.out.println(elasticIp); 
-		System.out.println(this.instanceId);
+	}
+	
+	public void assignElasticIp(){
 		AssociateAddressRequest aar = new AssociateAddressRequest();
 		aar.setInstanceId(this.instanceId);
 		aar.setPublicIp(this.ipAddress);

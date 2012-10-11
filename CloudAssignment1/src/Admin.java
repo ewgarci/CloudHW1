@@ -61,6 +61,7 @@ import com.amazonaws.services.ec2.model.CreateVolumeRequest;
 import com.amazonaws.services.ec2.model.CreateVolumeResult;
 import com.amazonaws.services.ec2.model.DetachVolumeRequest;
 import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
@@ -87,7 +88,7 @@ public class Admin {
 		//String keyPath = "c://";
 		String zone = "us-east-1a";
 		String imageId = "ami-76f0061f";
-		String bucketName = "CloudComputingWorkCluster";
+		String bucketName = "workcluster789";
 
 		createSecurityGroup(ec2, securityGroup);
 		createKey(keyName, ec2);
@@ -132,8 +133,27 @@ public class Admin {
 	}
 	
 	public static void createBucket(AmazonS3Client s3, String bucketName, String zone){
-		s3.createBucket(bucketName, zone);
+		try{
 		
+		List <Bucket> bucketList = s3.listBuckets();
+
+        for (Bucket bucket : bucketList){
+        	System.out.println(bucket.getName());
+        	if ( bucketName == bucket.getName() ){
+        		return;
+        	}
+        }
+        
+        s3.createBucket(bucketName);
+        		
+        return;	
+        	
+		}catch (AmazonServiceException ase) {
+            System.out.println("Caught Exception: " + ase.getMessage());
+            System.out.println("Reponse Status Code: " + ase.getStatusCode());
+            System.out.println("Error Code: " + ase.getErrorCode());
+            System.out.println("Request ID: " + ase.getRequestId());
+		}
 	}
 	
 	public static void createSecurityGroup(AmazonEC2 ec2, String securityGroup){
