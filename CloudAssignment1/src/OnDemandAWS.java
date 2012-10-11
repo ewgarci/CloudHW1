@@ -1,4 +1,5 @@
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -32,6 +33,7 @@ import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressRequest;
 import com.amazonaws.services.ec2.model.CreateImageRequest;
+import com.amazonaws.services.ec2.model.CreateImageResult;
 import com.amazonaws.services.ec2.model.CreateKeyPairRequest;
 import com.amazonaws.services.ec2.model.CreateKeyPairResult;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
@@ -77,7 +79,6 @@ public class OnDemandAWS {
 	String volumeId;
 	
 	
-	
 	public OnDemandAWS(String keyName, String securityGroup, String zone, String imageId, String machineName) throws IOException{
 		
 		credentials = new PropertiesCredentials(
@@ -91,9 +92,7 @@ public class OnDemandAWS {
 		this.zone = zone;
 		this.imageId= imageId;
 		this.machineName= machineName;
-		this.createEBS(10);
-
-		
+		this.createEBS(10);		
 	}
 	
 	public void createInstance() {
@@ -137,9 +136,7 @@ public class OnDemandAWS {
             System.out.println("Reponse Status Code: " + ase.getStatusCode());
             System.out.println("Error Code: " + ase.getErrorCode());
             System.out.println("Request ID: " + ase.getRequestId());
-		}
-		
-		
+		}		
 	}
 	
 	
@@ -163,8 +160,6 @@ public class OnDemandAWS {
         
         return null;
         
-        
-            	
     }
 	
 	
@@ -174,10 +169,10 @@ public class OnDemandAWS {
     
 	
 	public void assignElasticIp(String ipAddress){
-			AssociateAddressRequest aar = new AssociateAddressRequest();
-			aar.setInstanceId(instanceId);
-			aar.setPublicIp(ipAddress);
-			ec2.associateAddress(aar);
+		AssociateAddressRequest aar = new AssociateAddressRequest();
+		aar.setInstanceId(instanceId);
+		aar.setPublicIp(ipAddress);
+		ec2.associateAddress(aar);
 	}
 	
 	public void disassociateElasticIp(String ipAddress){	
@@ -195,47 +190,71 @@ public class OnDemandAWS {
     }
 	
 	public void startUpOnDemandAWS(){
-		
+        //start
+        StartInstancesRequest startIR = new StartInstancesRequest(Arrays.asList(this.instanceId));
+        ec2.startInstances(startIR);
 	}
 	
 	 public String createEBS(Integer size){
-	        /*********************************************
-	         * Create a volume
-	         *********************************************/
-	         CreateVolumeRequest cvr = new CreateVolumeRequest();
-	         cvr.setAvailabilityZone(zone);// "us-east-1a"
-	         cvr.setSize(size); //size = 10 gigabytes
-	         CreateVolumeResult volumeResult = ec2.createVolume(cvr);
-	         String createdVolumeId = volumeResult.getVolume().getVolumeId();//"vol-b51510cf"
-	         
-	         this.volumeId = createdVolumeId;
-	        return createdVolumeId;
+        /*********************************************
+         * Create a volume
+         *********************************************/
+         CreateVolumeRequest cvr = new CreateVolumeRequest();
+         cvr.setAvailabilityZone(zone);// "us-east-1a"
+         cvr.setSize(size); //size = 10 gigabytes
+         CreateVolumeResult volumeResult = ec2.createVolume(cvr);
+         String createdVolumeId = volumeResult.getVolume().getVolumeId();//"vol-b51510cf"
+         
+         this.volumeId = createdVolumeId;
+         return createdVolumeId;
 	}
 	
-	 public void attachEBS(){
-	        /*********************************************
-	         * Attach the volume to the instance
-	         *********************************************/
-	         AttachVolumeRequest avr = new AttachVolumeRequest();
-	         avr.setVolumeId(this.volumeId);
-	         avr.setInstanceId(this.instanceId);
-	         avr.setDevice("/dev/sdf");
-	         ec2.attachVolume(avr);        
-	    }
+	public void attachEBS(){
+        /*********************************************
+         * Attach the volume to the instance
+         *********************************************/
+         AttachVolumeRequest avr = new AttachVolumeRequest();
+         avr.setVolumeId(this.volumeId);
+         avr.setInstanceId(this.instanceId);
+         avr.setDevice("/dev/sdf");
+         ec2.attachVolume(avr);        
+	}
 	    
-	    public void detachEBS() {
-	        /*********************************************
-	         * Detach the volume from the instance
-	         *********************************************/
-	         DetachVolumeRequest dvr = new DetachVolumeRequest();
-	         dvr.setVolumeId(this.volumeId);
-	         dvr.setInstanceId(instanceId);
-	         ec2.detachVolume(dvr);
-	    }
+    public void detachEBS() {
+        /*********************************************
+         * Detach the volume from the instance
+         *********************************************/
+         DetachVolumeRequest dvr = new DetachVolumeRequest();
+         dvr.setVolumeId(this.volumeId);
+         dvr.setInstanceId(instanceId);
+         ec2.detachVolume(dvr);
+    }
 	
-	public void attachS3(){		
+	public void attachS3(String bucketName) throws IOException {
+        s3.createBucket(bucketName);
+        
+        //set key
+        String key = "object-name.txt";
+        
+        //set value
+        File file = File.createTempFile("temp", ".txt");
+        //file.deleteOnExit();
+        Writer writer = new OutputStreamWriter(new FileOutputStream(file));
+        writer.write("This is a sample sentence.\r\nYes!");
+        writer.close();
+        
+        //put object - bucket, key, value(file)
+        s3.putObject(new PutObjectRequest(bucketName, key, file));
+        
+        //get object
+        S3Object object = s3.getObject(new GetObjectRequest(bucketName, key));
+        BufferedReader reader = new BufferedReader(
+        	    new InputStreamReader(object.getObjectContent()));
+        String dataS3 = null;
+        while ((dataS3 = reader.readLine()) != null) {
+            System.out.println(dataS3);
+        }
 	}
-	
 
 	 //Creates a snapshot of the machine and returns the AMI
     public String saveSnapShot() {
