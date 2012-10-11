@@ -31,6 +31,7 @@ import com.amazonaws.services.ec2.model.DisassociateAddressRequest;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressRequest;
+import com.amazonaws.services.ec2.model.CreateImageRequest;
 import com.amazonaws.services.ec2.model.CreateKeyPairRequest;
 import com.amazonaws.services.ec2.model.CreateKeyPairResult;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
@@ -73,6 +74,7 @@ public class OnDemandAWS {
 	String machineName;
 	String zone;
 	String imageId;	
+	String volumeId;
 	
 	
 	
@@ -89,6 +91,7 @@ public class OnDemandAWS {
 		this.zone = zone;
 		this.imageId= imageId;
 		this.machineName= machineName;
+		this.createEBS(10);
 
 		
 	}
@@ -139,6 +142,8 @@ public class OnDemandAWS {
 		
 	}
 	
+	
+	
 	public Instance getInstance(){
     	
         DescribeInstancesResult describeInstancesRequest = ec2.describeInstances();
@@ -181,31 +186,74 @@ public class OnDemandAWS {
 		ec2.disassociateAddress(dar);
 	}
 	
-	public void shutDownOnDemandAWS(){
-		
-	}
+	//Save a snapshot of the machine and terminate it
+    public void shutDownOnDemandAWS(){
+        this.saveSnapShot();
+        
+        TerminateInstancesRequest tir = new TerminateInstancesRequest(Arrays.asList(this.instanceId));
+        ec2.terminateInstances(tir);
+    }
 	
 	public void startUpOnDemandAWS(){
 		
 	}
 	
-	public void createEBS(){
-		
+	 public String createEBS(Integer size){
+	        /*********************************************
+	         * Create a volume
+	         *********************************************/
+	         CreateVolumeRequest cvr = new CreateVolumeRequest();
+	         cvr.setAvailabilityZone(zone);// "us-east-1a"
+	         cvr.setSize(size); //size = 10 gigabytes
+	         CreateVolumeResult volumeResult = ec2.createVolume(cvr);
+	         String createdVolumeId = volumeResult.getVolume().getVolumeId();//"vol-b51510cf"
+	         
+	         this.volumeId = createdVolumeId;
+	        return createdVolumeId;
 	}
 	
-	public void attachEBS(){
-		
-	}
-	
-	public void removeEBS(){
-		
-	}
+	 public void attachEBS(){
+	        /*********************************************
+	         * Attach the volume to the instance
+	         *********************************************/
+	         AttachVolumeRequest avr = new AttachVolumeRequest();
+	         avr.setVolumeId(this.volumeId);
+	         avr.setInstanceId(this.instanceId);
+	         avr.setDevice("/dev/sdf");
+	         ec2.attachVolume(avr);        
+	    }
+	    
+	    public void detachEBS() {
+	        /*********************************************
+	         * Detach the volume from the instance
+	         *********************************************/
+	         DetachVolumeRequest dvr = new DetachVolumeRequest();
+	         dvr.setVolumeId(this.volumeId);
+	         dvr.setInstanceId(instanceId);
+	         ec2.detachVolume(dvr);
+	    }
 	
 	public void attachS3(){		
 	}
 	
-	//Peter
-	public String saveSnapShot() {
-		return "";
-	}	
+
+	 //Creates a snapshot of the machine and returns the AMI
+    public String saveSnapShot() {
+            /***********************************
+         * Create an AMI from an instance
+         *********************************/
+        CreateImageRequest cir = new CreateImageRequest();
+        cir.setInstanceId(instanceId);
+        cir.setName(instanceId + "__AMI"); //we can choose the name
+        
+        CreateImageResult createImageResult = ec2.createImage(cir);
+        String createdImageId = createImageResult.getImageId();
+        
+        System.out.println("Sent creating AMI request. AMI id=" + createdImageId);
+        
+        //Save the AMI
+        this.imageId = createdImageId;
+        
+        return createdImageId;
+    }    
 }
