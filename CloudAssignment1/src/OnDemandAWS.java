@@ -117,6 +117,16 @@ public class OnDemandAWS {
             	instanceId = ins.getInstanceId();
             	System.out.println("New instance has been created: "+ins.getInstanceId());
             }        
+            
+            List<String> resources = new LinkedList<String>();
+            List<Tag> tags = new LinkedList<Tag>();
+            Tag nameTag = new Tag("Name", machineName);
+            
+            resources.add(instanceId);
+            tags.add(nameTag);
+            
+            CreateTagsRequest ctr = new CreateTagsRequest(resources, tags);
+            ec2.createTags(ctr);
            
 			
 		} catch (AmazonServiceException ase) {
