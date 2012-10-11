@@ -77,6 +77,7 @@ public class OnDemandAWS {
 	String zone;
 	String imageId;	
 	String volumeId;
+	String ipAddress;
 	
 	
 	public OnDemandAWS(String keyName, String securityGroup, String zone, String imageId, String machineName) throws IOException{
@@ -115,10 +116,14 @@ public class OnDemandAWS {
             //get instanceId from the result
             List<Instance> resultInstance = result.getReservation().getInstances();
             
+            InstanceState is = null;
+            
             for (Instance ins : resultInstance){
             	instanceId = ins.getInstanceId();
-            	System.out.println("New instance has been created: "+ins.getInstanceId());
+            	is = ins.getState();
             }        
+            
+            
             
             List<String> resources = new LinkedList<String>();
             List<Tag> tags = new LinkedList<Tag>();
@@ -129,6 +134,20 @@ public class OnDemandAWS {
             
             CreateTagsRequest ctr = new CreateTagsRequest(resources, tags);
             ec2.createTags(ctr);
+            
+            while (is.getName().equals("pending")){
+        		try {
+					Thread.sleep(30000);
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+        		is = this.getInstance().getState();
+        	}
+            
+            this.createElasticIp();
+            
+            System.out.println(machineName + " id = " + this.instanceId + " ip = " + this.ipAddress);
            
 			
 		} catch (AmazonServiceException ase) {
@@ -153,7 +172,7 @@ public class OnDemandAWS {
         
                 
         for ( Instance ins : instances){
-           	if ( imageId.equalsIgnoreCase(ins.getInstanceId()) == true ){
+           	if ( instanceId.equalsIgnoreCase(ins.getInstanceId()) == true ){
         		return ins;
         	}
         }
@@ -168,16 +187,22 @@ public class OnDemandAWS {
     //}
     
 	
-	public void assignElasticIp(String ipAddress){
+	public void createElasticIp(){
+		AllocateAddressResult elasticResult = ec2.allocateAddress();
+		String elasticIp = elasticResult.getPublicIp();
+		this.ipAddress = elasticIp;
+		System.out.println(this.ipAddress); 
+		System.out.println(elasticIp); 
+		System.out.println(this.instanceId);
 		AssociateAddressRequest aar = new AssociateAddressRequest();
-		aar.setInstanceId(instanceId);
-		aar.setPublicIp(ipAddress);
+		aar.setInstanceId(this.instanceId);
+		aar.setPublicIp(this.ipAddress);
 		ec2.associateAddress(aar);
 	}
 	
-	public void disassociateElasticIp(String ipAddress){	
+	public void disassociateElasticIp(){	
 		DisassociateAddressRequest dar = new DisassociateAddressRequest();
-		dar.setPublicIp(ipAddress);
+		dar.setPublicIp(this.ipAddress);
 		ec2.disassociateAddress(dar);
 	}
 	
@@ -206,6 +231,17 @@ public class OnDemandAWS {
          String createdVolumeId = volumeResult.getVolume().getVolumeId();//"vol-b51510cf"
          
          this.volumeId = createdVolumeId;
+      
+         List<String> resources = new LinkedList<String>();
+         List<Tag> tags = new LinkedList<Tag>();
+         Tag nameTag = new Tag("Name", machineName);
+         
+         resources.add(this.volumeId);
+         tags.add(nameTag);
+         
+         CreateTagsRequest ctr = new CreateTagsRequest(resources, tags);
+         ec2.createTags(ctr);
+         
          return createdVolumeId;
 	}
 	
