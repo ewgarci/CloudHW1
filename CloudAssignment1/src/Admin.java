@@ -87,9 +87,12 @@ public class Admin {
 		//String keyPath = "c://";
 		String zone = "us-east-1a";
 		String imageId = "ami-76f0061f";
+		String bucketName = "CloudComputingWorkCluster";
 
 		createSecurityGroup(ec2, securityGroup);
 		createKey(keyName, ec2);
+		createBucket(s3, bucketName, zone);
+		
 
 		OnDemandAWS bob = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC");
 		OnDemandAWS alice = new OnDemandAWS(keyName, securityGroup, zone, imageId, "alice-PC");
@@ -128,7 +131,10 @@ public class Admin {
 	public void getCPUUsage(String instanceId){	
 	}
 	
-	
+	public static void createBucket(AmazonS3Client s3, String bucketName, String zone){
+		s3.createBucket(bucketName, zone);
+		
+	}
 	
 	public static void createSecurityGroup(AmazonEC2 ec2, String securityGroup){
 		

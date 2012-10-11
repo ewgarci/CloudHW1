@@ -267,7 +267,7 @@ public class OnDemandAWS {
     }
 	
 	public void attachS3(String bucketName) throws IOException {
-        s3.createBucket(bucketName);
+        
         
         //set key
         String key = "object-name.txt";
