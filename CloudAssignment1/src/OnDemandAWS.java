@@ -40,10 +40,13 @@ import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupResult;
 import com.amazonaws.services.ec2.model.CreateTagsRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
+import com.amazonaws.services.ec2.model.DescribeImageAttributeRequest;
+import com.amazonaws.services.ec2.model.DescribeImagesRequest;
 import com.amazonaws.services.ec2.model.DescribeImagesResult;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.DescribeKeyPairsResult;
 import com.amazonaws.services.ec2.model.Image;
+import com.amazonaws.services.ec2.model.InstanceType;
 import com.amazonaws.services.ec2.model.Placement;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceState;
@@ -108,9 +111,13 @@ public class OnDemandAWS {
             int minInstanceCount = 1; // create 1 instance
             int maxInstanceCount = 1;
             RunInstancesRequest rir = new RunInstancesRequest(imageId, minInstanceCount, maxInstanceCount);
+            
             rir.setKeyName(keyName);
             rir.setSecurityGroups(securityGroups);
             rir.setPlacement(placement);
+            rir.setMonitoring(true);
+            rir.setInstanceType(InstanceType.T1Micro);
+            
             RunInstancesResult result = ec2.runInstances(rir);
             
             //get instanceId from the result
@@ -209,7 +216,10 @@ public class OnDemandAWS {
 	
 	//Save a snapshot of the machine and terminate it
     public void shutDownOnDemandAWS(){
-        this.saveSnapShot();
+//        this.saveSnapShot();
+//        
+//        StopInstancesRequest sir = new StopInstancesRequest();
+//        sir.setInstanceIds(Arrays.asList(this.instanceId));
         
         TerminateInstancesRequest tir = new TerminateInstancesRequest(Arrays.asList(this.instanceId));
         ec2.terminateInstances(tir);
@@ -311,5 +321,16 @@ public class OnDemandAWS {
         this.imageId = createdImageId;
         
         return createdImageId;
-    }    
+    }
+    
+    //Should be invoked after the saveSnapShot has been called
+    public String getSnapShotState() {
+		DescribeImagesRequest dir = new DescribeImagesRequest();
+		dir.setImageIds(Arrays.asList(this.imageId));
+		String state = ec2.describeImages(dir).getImages().get(0).getState();
+		
+		return state;
+    }
+    
+    
 }

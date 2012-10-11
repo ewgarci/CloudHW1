@@ -1,5 +1,6 @@
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -40,6 +41,8 @@ import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupResult;
 import com.amazonaws.services.ec2.model.CreateTagsRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
+import com.amazonaws.services.ec2.model.DescribeImageAttributeRequest;
+import com.amazonaws.services.ec2.model.DescribeImagesRequest;
 import com.amazonaws.services.ec2.model.DescribeImagesResult;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.DescribeKeyPairsResult;
@@ -71,10 +74,10 @@ import com.amazonaws.services.s3.model.S3Object;
 public class Admin {
 	
 		
-	public static void main(String[] args) throws IOException {
+	public static void main(String[] args) throws Exception {
 
 		AWSCredentials credentials = new PropertiesCredentials(
-				awsStartup.class.getResourceAsStream("AwsCredentials.properties"));
+				Admin.class.getResourceAsStream("AwsCredentials.properties"));
 		AmazonEC2 ec2 = new AmazonEC2Client(credentials);
 		AmazonS3Client s3  = new AmazonS3Client(credentials);
 
@@ -92,15 +95,53 @@ public class Admin {
 
 		createSecurityGroup(ec2, securityGroup);
 		createKey(keyName, ec2);
-		createBucket(s3, bucketName, zone);
+		//createBucket(s3, bucketName, zone);
 		
 
 		OnDemandAWS bob = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC");
-		OnDemandAWS alice = new OnDemandAWS(keyName, securityGroup, zone, imageId, "alice-PC");
+		//OnDemandAWS alice = new OnDemandAWS(keyName, securityGroup, zone, imageId, "alice-PC");
 
 		bob.createInstance();
-		alice.createInstance();
-
+		//alice.createInstance();
+			
+		Thread.sleep(10*1000);
+		
+		while (true) {
+			System.out.println("Start up");
+			bob.startUpOnDemandAWS();
+			System.out.println("Attach EBS");
+			bob.attachEBS();
+			//bob.attachS3(bucketName);
+			
+			//Run the machines until 5pm or if idle
+			while (true) {
+				break;
+			}
+			
+			//Try to shut down the machine		
+			System.out.println("Detach EBS");
+			bob.detachEBS();
+			System.out.println("Snapshot");
+			
+			bob.saveSnapShot();		
+			//wait for the snapshot to be created and then shutdown the machine
+			while(!bob.getSnapShotState().equalsIgnoreCase("available")){
+				Thread.sleep(15*1000);
+			}
+			System.out.println("Snapshot created");
+			
+			System.out.println("Terminate");		
+			bob.shutDownOnDemandAWS();
+			
+			//Wait till the next day or wait for request
+			while (true) {
+				break;
+			}
+			
+			//Check if we should exit the application
+			if(true)
+				break;
+		}
 	}
 	
 	private static void createKey(String keyName, AmazonEC2 ec2){
