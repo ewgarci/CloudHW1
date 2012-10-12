@@ -101,48 +101,86 @@ public class Admin {
 		OnDemandAWS bob = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC");
 		//OnDemandAWS alice = new OnDemandAWS(keyName, securityGroup, zone, imageId, "alice-PC");
 
-		bob.createInstance();
 		//alice.createInstance();
 			
-		Thread.sleep(10*1000);
+
 		
+		
+		int days = 1;
+		int numberOfChecks = 0;
+		long pingCW = 30*1000;
 		while (true) {
-			System.out.println("Start up");
-			bob.startUpOnDemandAWS();
-			System.out.println("Attach EBS");
-			bob.attachEBS();
-			//bob.attachS3(bucketName);
 			
-			//Run the machines until 5pm or if idle
-			while (true) {
-				break;
+			if (isStartOfDay(numberOfChecks)) {
+				numberOfChecks++;
+				System.out.println("DAY: " + days);				
+				
+				//Recreate all instances and start them up;
+				bob.createInstance();			
+				
+				//Sleep before starting up
+				Thread.sleep(10*1000);
+				
+				System.out.println("Start up");
+				bob.startUpOnDemandAWS();
+				System.out.println("Attach EBS");
+				bob.attachEBS();
+				//bob.attachS3(bucketName);
+				
+				//Sleep for 30sec before pinging CloudWatch for the first time
+				Thread.sleep(pingCW);
+				continue;
+			} else if (isEndOfDay(numberOfChecks)) {
+				numberOfChecks = 0;
+				days++;
+				
+				/*Terminate all instances*/
+
+				//Try to shut down the machine		
+				System.out.println("Detach EBS");
+				bob.detachEBS();
+				System.out.println("Snapshot");
+				
+				bob.saveSnapShot();		
+				//wait for the snapshot to be created and then shutdown the machine
+				while(!bob.getSnapShotState().equalsIgnoreCase("available")){
+					Thread.sleep(15*1000);
+				}
+				System.out.println("Snapshot created");
+				
+				System.out.println("Terminate");		
+				bob.shutDownOnDemandAWS();
+				
+				/*Terminate all instances*/
+
+				if (days > 2)
+					break;
+				
+				System.out.println("SLEEP");				
+				//Sleep for the night - 2min
+				Thread.sleep(30 * 1000);				
+				continue;
 			}
+
+			//See which machine is idle and try to shut it down.
+			numberOfChecks++;
 			
-			//Try to shut down the machine		
-			System.out.println("Detach EBS");
-			bob.detachEBS();
-			System.out.println("Snapshot");
+			System.out.println("Check: " + numberOfChecks);
 			
-			bob.saveSnapShot();		
-			//wait for the snapshot to be created and then shutdown the machine
-			while(!bob.getSnapShotState().equalsIgnoreCase("available")){
-				Thread.sleep(15*1000);
-			}
-			System.out.println("Snapshot created");
-			
-			System.out.println("Terminate");		
-			bob.shutDownOnDemandAWS();
-			
-			//Wait till the next day or wait for request
-			while (true) {
-				break;
-			}
-			
-			//Check if we should exit the application
-			if(true)
-				break;
+			//Sleep for 30sec before pinging CloudWatch again
+			Thread.sleep(pingCW);
 		}
 	}
+	
+	private static Boolean isStartOfDay(int numberOfChecks){
+		return numberOfChecks == 0;
+	}
+	
+	private static Boolean isEndOfDay(int numberOfChecks){
+		return numberOfChecks > 3;
+	}
+	
+	
 	
 	private static void createKey(String keyName, AmazonEC2 ec2){
 		try {

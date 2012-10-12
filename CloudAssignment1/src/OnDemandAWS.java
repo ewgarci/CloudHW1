@@ -308,6 +308,7 @@ public class OnDemandAWS {
             /***********************************
          * Create an AMI from an instance
          *********************************/
+    	
         CreateImageRequest cir = new CreateImageRequest();
         cir.setInstanceId(instanceId);
         cir.setName(instanceId + "__AMI"); //we can choose the name
