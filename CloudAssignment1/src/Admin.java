@@ -14,9 +14,14 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import ch.ethz.ssh2.Connection;
+import ch.ethz.ssh2.Session;
+import ch.ethz.ssh2.StreamGobbler;
+
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
@@ -98,13 +103,21 @@ public class Admin {
 
 
 		OnDemandAWS bob = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC");
-		//OnDemandAWS alice = new OnDemandAWS(keyName, securityGroup, zone, imageId, "alice-PC");
+		OnDemandAWS alice = new OnDemandAWS(keyName, securityGroup, zone, imageId, "alice-PC");
 
-		//alice.createInstance();
-
-
-
-
+		
+		bob.createInstance();
+		alice.createInstance();
+		Thread.sleep(2*60*1000);
+		//Before increasing CPU ssh needs to be initialized. This takes a around 2 minutes after the cpu starts
+		increaseCPU(bob, 2);
+		
+		while(true){
+			System.out.println(getCPUUsage(cloudWatch, bob.instanceId));
+			System.out.println(getCPUUsage(cloudWatch, alice.instanceId));
+			Thread.sleep(60*1000);
+		}
+/*
 		int days = 1;
 		int numberOfChecks = 0;
 		long pingCW = 30*1000;
@@ -133,8 +146,7 @@ public class Admin {
 				numberOfChecks = 0;
 				days++;
 
-				/*Terminate all instances*/
-
+		
 				//Try to shut down the machine		
 				System.out.println("Detach EBS");
 				bob.detachEBS();
@@ -150,7 +162,6 @@ public class Admin {
 				System.out.println("Terminate");		
 				bob.shutDownOnDemandAWS();
 
-				/*Terminate all instances*/
 
 				if (days > 2)
 					break;
@@ -169,7 +180,10 @@ public class Admin {
 			//Sleep for 30sec before pinging CloudWatch again
 			Thread.sleep(pingCW);
 		}
+	*/
 	}
+	
+	
 
 	private static Boolean isStartOfDay(int numberOfChecks){
 		return numberOfChecks == 0;
@@ -179,13 +193,14 @@ public class Admin {
 		return numberOfChecks > 3;
 	}
 
+	
 
 
 	private static void createKey(String keyName, AmazonEC2 ec2){
 		try {
 			List<KeyPairInfo> keyPairList = ec2.describeKeyPairs().getKeyPairs();
 			for (KeyPairInfo keyPair : keyPairList){
-				System.out.println(keyPair.getKeyName());
+				//System.out.println(keyPair.getKeyName());
 				if ( keyName.equalsIgnoreCase(keyPair.getKeyName()) ){
 					return;
 				}
@@ -207,55 +222,117 @@ public class Admin {
 		}
 	}
 
+	static void increaseCPU(OnDemandAWS pc, int time) throws InterruptedException{
+
+		File keyfile = new File("C:/Users/Dfosak/Downloads/my_key.pem"); // or "~/.ssh/id_dsa"
+		String keyfilePass = "none"; // will be ignored if not needed
+
+		try
+		{
+			Connection conn = new Connection(pc.ipAddress);
+			conn.connect();
+
+			boolean isAuthenticated = conn.authenticateWithPublicKey("ec2-user", keyfile, keyfilePass);
+			if (isAuthenticated == false)
+				throw new IOException("Authentication failed.");
+
+
+			Session sess = conn.openSession();
+			sess.execCommand("uname -a && date && uptime && who");
+			InputStream stdout = new StreamGobbler(sess.getStdout());
+			BufferedReader br = new BufferedReader(new InputStreamReader(stdout));
+			System.out.println("Here is some information about the remote host:");
+
+			while (true)
+			{
+				String line = br.readLine();
+				if (line == null)
+					break;
+				System.out.println(line);
+			}
+
+			/* Close this session */
+
+			sess.close();
+			br.close();
+
+			sess = conn.openSession();
+			System.out.println("Increasing CPU usage for " + time + " minutes");
+			sess.execCommand("while true; do true; done");
+			Thread.sleep(time*60*1000);
+			sess.close();
+
+			sess = conn.openSession();
+			sess.execCommand("killall bash");
+			sess.close();
+
+			conn.close();
+
+		}
+		catch (IOException e)
+		{
+			e.printStackTrace(System.err);
+			System.exit(2);
+		}
+	}
 
 	public static double getCPUUsage(AmazonCloudWatchClient cloudWatch, String instanceId){	
-		//create request message
-		GetMetricStatisticsRequest statRequest = new GetMetricStatisticsRequest();
-		//set up request message
-		statRequest.setNamespace("AWS/EC2"); //namespace
-		statRequest.setPeriod(60); //period of data
-		ArrayList<String> stats = new ArrayList<String>();
-		//Use one of these strings: Average, Maximum, Minimum, SampleCount, Sum 
-		stats.add("Average"); 
-		stats.add("Sum");
-		stats.add("Maximum");
-		statRequest.setStatistics(stats);
-		//Use one of these strings: CPUUtilization, NetworkIn, NetworkOut, DiskReadBytes, DiskWriteBytes, DiskReadOperations  
-		statRequest.setMetricName("CPUUtilization"); 
-		// set time
-		GregorianCalendar calendar = new GregorianCalendar(TimeZone.getTimeZone("UTC"));
-		calendar.add(GregorianCalendar.SECOND, -1 * calendar.get(GregorianCalendar.SECOND)); // 1 second ago
-		Date endTime = calendar.getTime();
-		calendar.add(GregorianCalendar.MINUTE, -1); // 1 minutes ago
-		Date startTime = calendar.getTime();
-		statRequest.setStartTime(startTime);
-		statRequest.setEndTime(endTime);
-
-		//specify an instance
-		ArrayList<Dimension> dimensions = new ArrayList<Dimension>();
-		dimensions.add(new Dimension().withName("InstanceId").withValue(instanceId));
-		statRequest.setDimensions(dimensions);
-
-		//get statistics
-		GetMetricStatisticsResult statResult = cloudWatch.getMetricStatistics(statRequest);
-
-		//display
-		System.out.println(statResult.toString());
-		List<Datapoint> dataList = statResult.getDatapoints();
-		Double averageCPU = null;
-		Date timeStamp = null;
-		for (Datapoint data : dataList){
-			averageCPU = data.getAverage();
-			timeStamp = data.getTimestamp();
-			System.out.println("Average CPU utlilization for last 1 minute since " +timeStamp.toString() + ": " +averageCPU);
-			System.out.println("Max CPU utlilization for last 1 minute since "+timeStamp.toString() + ": " + data.getMaximum());
-			System.out.println("Total CPU utlilization for last 1 minutes since "+timeStamp.toString() + ": " + data.getSum());
-		}
-		if (averageCPU == null)
+		
+		try{
+			//create request message
+			GetMetricStatisticsRequest statRequest = new GetMetricStatisticsRequest();
+			//set up request message
+			statRequest.setNamespace("AWS/EC2"); //namespace
+			statRequest.setPeriod(60); //period of data
+			ArrayList<String> stats = new ArrayList<String>();
+			//Use one of these strings: Average, Maximum, Minimum, SampleCount, Sum 
+			stats.add("Average"); 
+			stats.add("Sum");
+			stats.add("Maximum");
+			statRequest.setStatistics(stats);
+			//Use one of these strings: CPUUtilization, NetworkIn, NetworkOut, DiskReadBytes, DiskWriteBytes, DiskReadOperations  
+			statRequest.setMetricName("CPUUtilization"); 
+			// set time
+			GregorianCalendar calendar = new GregorianCalendar(TimeZone.getTimeZone("UTC"));
+			calendar.add(GregorianCalendar.SECOND, -1 * calendar.get(GregorianCalendar.SECOND)); // 1 second ago
+			Date endTime = calendar.getTime();
+			calendar.add(GregorianCalendar.MINUTE, -1); // 1 minutes ago
+			Date startTime = calendar.getTime();
+			statRequest.setStartTime(startTime);
+			statRequest.setEndTime(endTime);
+	
+			//specify an instance
+			ArrayList<Dimension> dimensions = new ArrayList<Dimension>();
+			dimensions.add(new Dimension().withName("InstanceId").withValue(instanceId));
+			statRequest.setDimensions(dimensions);
+	
+			//get statistics
+			GetMetricStatisticsResult statResult = cloudWatch.getMetricStatistics(statRequest);
+	
+			//display
+			System.out.println(statResult.toString());
+			List<Datapoint> dataList = statResult.getDatapoints();
+			Double averageCPU = null;
+			Date timeStamp = null;
+			for (Datapoint data : dataList){
+				averageCPU = data.getAverage();
+				timeStamp = data.getTimestamp();
+				System.out.println("Average CPU utlilization for last 1 minute since " +timeStamp.toString() + ": " +averageCPU);
+				System.out.println("Max CPU utlilization for last 1 minute since "+timeStamp.toString() + ": " + data.getMaximum());
+				System.out.println("Total CPU utlilization for last 1 minutes since "+timeStamp.toString() + ": " + data.getSum());
+			}
+			if (averageCPU == null)
+				return 0;
+			else 
+				return averageCPU;
+		}catch (AmazonServiceException ase) {
+			System.out.println("Caught Exception: " + ase.getMessage());
+			System.out.println("Reponse Status Code: " + ase.getStatusCode());
+			System.out.println("Error Code: " + ase.getErrorCode());
+			System.out.println("Request ID: " + ase.getRequestId());
 			return 0;
-		else 
-			return averageCPU;
-
+		}
+		
 	}
 
 
@@ -269,7 +346,7 @@ public class Admin {
 			List <Bucket> bucketList = s3.listBuckets();
 
 			for (Bucket bucket : bucketList){
-				System.out.println(bucket.getName());
+				//System.out.println(bucket.getName());
 				if ( bucketName == bucket.getName() ){
 					return;
 				}
@@ -292,7 +369,7 @@ public class Admin {
 
 		List <SecurityGroup> secGroupList = ec2.describeSecurityGroups().getSecurityGroups();
 		for (SecurityGroup secGroup : secGroupList){
-			System.out.println(secGroup.getGroupName());
+			//System.out.println(secGroup.getGroupName());
 			if ( securityGroup.equalsIgnoreCase(secGroup.getGroupName()) ){
 				return;
 			}
@@ -316,7 +393,7 @@ public class Admin {
 		.withIpProtocol("tcp")
 		.withFromPort(22)
 		.withToPort(22);
-		//http
+			//http
 		IpPermission ipPermission2 = new IpPermission();
 		ipPermission2.withIpRanges("0.0.0.0/0")
 		.withIpProtocol("tcp")
@@ -334,12 +411,19 @@ public class Admin {
 		.withIpProtocol("tcp")
 		.withFromPort(65535)
 		.withToPort(65535);
+		//telnet
+		IpPermission ipPermission5 = new IpPermission();
+		ipPermission5.withIpRanges("0.0.0.0/0")
+		.withIpProtocol("tcp")
+		.withFromPort(23)
+		.withToPort(23);
 
 		List<IpPermission> permissions = new ArrayList<IpPermission>();
 		permissions.add(ipPermission1);
 		permissions.add(ipPermission2);
 		permissions.add(ipPermission3);
 		permissions.add(ipPermission4);
+		permissions.add(ipPermission5);
 
 		AuthorizeSecurityGroupIngressRequest authorizeSecurityGroupIngressRequest =
 				new AuthorizeSecurityGroupIngressRequest();
