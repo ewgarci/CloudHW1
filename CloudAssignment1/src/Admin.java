@@ -80,6 +80,16 @@ import com.amazonaws.services.s3.model.S3Object;
 
 public class Admin {
 
+	//Interval for pinging the CloudWatch for statistics - seconds
+	public static int pingCW = 30;
+	//Max number of days the VMs should be created and destroyed
+	public static int maxDays = 2;
+	//Duration of night seconds
+	public static int nightDuration = 30;
+	//Duration of day in seconds
+	public static int dayDuration = 60*2;
+	//The lower bound under which a VM is considered idle and therefore terminated
+	public static double cpuIdle = 0.00;
 
 	public static void main(String[] args) throws Exception {
 
@@ -95,7 +105,7 @@ public class Admin {
 		//String keyPath = "c://";
 		String zone = "us-east-1a";
 		String imageId = "ami-76f0061f";
-		String bucketName = "workcluster789";
+		String bucketName = "workcluster789";//pblcluster";
 
 		createSecurityGroup(ec2, securityGroup);
 		createKey(keyName, ec2);
@@ -105,82 +115,79 @@ public class Admin {
 		OnDemandAWS bob = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC");
 		OnDemandAWS alice = new OnDemandAWS(keyName, securityGroup, zone, imageId, "alice-PC");
 
-		
+	/*	
 		bob.createInstance();
 		alice.createInstance();
 		Thread.sleep(2*60*1000);
 		//Before increasing CPU ssh needs to be initialized. This takes a around 2 minutes after the cpu starts
 		increaseCPU(bob, 2);
-		
+
 		while(true){
 			System.out.println(getCPUUsage(cloudWatch, bob.instanceId));
 			System.out.println(getCPUUsage(cloudWatch, alice.instanceId));
 			Thread.sleep(60*1000);
 		}
-/*
+	 */
+		List<OnDemandAWS> machines = Arrays.asList(bob, alice);
+
 		int days = 1;
 		int numberOfChecks = 0;
-		long pingCW = 30*1000;
 		while (true) {
 
 			if (isStartOfDay(numberOfChecks)) {
 				numberOfChecks++;
 				System.out.println("DAY: " + days);				
 
-				//Recreate all instances and start them up;
-				bob.createInstance();			
+				//Create all instances and start them up;
+				for (OnDemandAWS vm : machines)
+					createAndStartUpVM(vm, bucketName);
 
-				//Sleep before starting up
-				Thread.sleep(10*1000);
-
-				System.out.println("Start up");
-				bob.startUpOnDemandAWS();
-				System.out.println("Attach EBS");
-				bob.attachEBS();
-				//bob.attachS3(bucketName);
-
+				System.out.println("All machines are created.");	
 				//Sleep for 30sec before pinging CloudWatch for the first time
-				Thread.sleep(pingCW);
+				sleep(pingCW);
 				continue;
 			} else if (isEndOfDay(numberOfChecks)) {
 				numberOfChecks = 0;
 				days++;
 
-		
-				//Try to shut down the machine		
-				System.out.println("Detach EBS");
-				bob.detachEBS();
-				System.out.println("Snapshot");
+				/*Terminate all instances*/
+				for (OnDemandAWS vm : machines)
+					terminateVM(vm);
+				/*Terminate all instances*/
 
-				bob.saveSnapShot();		
-				//wait for the snapshot to be created and then shutdown the machine
-				while(!bob.getSnapShotState().equalsIgnoreCase("available")){
-					Thread.sleep(15*1000);
-				}
-				System.out.println("Snapshot created");
-
-				System.out.println("Terminate");		
-				bob.shutDownOnDemandAWS();
-
-
-				if (days > 2)
+				//We have reached maximum number of days
+				if (days > maxDays)
 					break;
 
-				System.out.println("SLEEP");				
+				System.out.println("All machines are terminated. Now SLEEP.");				
 				//Sleep for the night - 2min
-				Thread.sleep(30 * 1000);				
+				sleep(nightDuration);				
 				continue;
 			}
 
-			//See which machine is idle and try to shut it down.
+			//See which machine is used a lot and try to auto-scale and which one is not used and kill it.
 			numberOfChecks++;
 
+			//Terminate idle machines
+			for (OnDemandAWS vm : machines)
+				if(isIdle(cloudWatch, vm, cpuIdle)) {
+					terminateVM(vm);
+					System.out.println(vm.machineName + " is IDLE and terminated");
+				}
+			
+			
 			System.out.println("Check: " + numberOfChecks);
 
 			//Sleep for 30sec before pinging CloudWatch again
-			Thread.sleep(pingCW);
+			sleep(pingCW);
 		}
-	*/
+		
+		//Shutdown clients
+		ec2.shutdown();
+		s3.shutdown();
+		cloudWatch.shutdown();
+		
+		System.out.println("EXIT Program");
 	}
 	
 	
@@ -192,8 +199,63 @@ public class Admin {
 	private static Boolean isEndOfDay(int numberOfChecks){
 		return numberOfChecks > 3;
 	}
-
 	
+	//Checks if the CPU of a machine is idle
+	private static Boolean isIdle(AmazonCloudWatchClient cloudWatch, OnDemandAWS vm, double bound) {
+		if (vm.getIsTerminated(true)) return false;
+		
+		double p = getCPUUsage(cloudWatch, vm.instanceId);
+		if (p < 0) return false;
+		return p < bound;
+	}
+	
+	//Invokes Thread sleep and handles exception
+	public static void sleep(int seconds) {
+		try {
+			Thread.sleep(seconds*1000);
+		} catch (InterruptedException e) {
+			System.out.println("Caught Exception: " + e.getMessage());
+		}
+	}
+	
+	//Creates a machine and starts it up
+	private static void createAndStartUpVM(OnDemandAWS machine, String bucketName) throws Exception {
+		System.out.println("Creating machine...");
+		machine.createInstance();			
+
+		//Sleep before starting up
+		sleep(10);
+
+		machine.startUpOnDemandAWS();
+		System.out.println("Attach EBS");
+		machine.attachEBS();
+		machine.attachS3(bucketName);
+		System.out.println("Machine created.");		
+	}
+
+	//Terminates a machine and takes a snapshot
+	private static void terminateVM(OnDemandAWS machine) {
+
+		if (machine.getIsTerminated(true))
+			return;
+
+		//Try to shut down the machine	
+		System.out.println("Terminating machine...");
+		System.out.println("Detach EBS");
+		machine.detachEBS();
+		System.out.println("Take Snapshot");
+
+		machine.saveSnapShot();		
+		//wait for the snapshot to be created and then shutdown the machine
+		do {
+			sleep(10);
+		} while(!machine.getSnapShotState().equalsIgnoreCase("available"));
+		System.out.println("Snapshot created");
+
+		System.out.println("Terminated");
+		machine.shutDownOnDemandAWS();
+	}
+
 
 
 	private static void createKey(String keyName, AmazonEC2 ec2){

@@ -81,6 +81,7 @@ public class OnDemandAWS {
 	String imageId;	
 	String volumeId;
 	String ipAddress;
+	Boolean isTerminated = true;
 	
 	
 	public OnDemandAWS(String keyName, String securityGroup, String zone, String imageId, String machineName) throws IOException{
@@ -159,8 +160,8 @@ public class OnDemandAWS {
             
             this.assignElasticIp();
             
-            
-            System.out.println(machineName + " id = " + this.instanceId + " ip = " + this.ipAddress);
+            isTerminated = false;
+            System.out.println(machineName + " id = " + this.instanceId + " ip = " + this.ipAddress + " AMI = " + this.imageId);
            
 			
 		} catch (AmazonServiceException ase) {
@@ -333,5 +334,14 @@ public class OnDemandAWS {
 		return state;
     }
     
+    //Returns a bool value that indicates whether the machine is terminated
+    public Boolean getIsTerminated(Boolean getFromService) {
+    	if (!getFromService) return this.isTerminated;
+    	
+    	Instance ins = this.getInstance();
+    	if (ins == null || ins.getState().getCode() > 16) 
+    		return true;
+    	return false;
+    }
     
 }
