@@ -11,12 +11,16 @@ import java.text.SimpleDateFormat;
 import java.util.GregorianCalendar;
 import java.util.TimeZone;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.io.StringReader;
 import java.io.Writer;
 import ch.ethz.ssh2.Connection;
 import ch.ethz.ssh2.Session;
@@ -81,16 +85,17 @@ import com.amazonaws.services.s3.model.S3Object;
 public class Admin {
 
 	//Interval for pinging the CloudWatch for statistics - seconds
-	public static int pingCW = 30;
+	public static int pingCW = 60;
 	//Max number of days the VMs should be created and destroyed
-	public static int maxDays = 2;
+	public static int maxDays = 3;
 	//Duration of night seconds
-	public static int nightDuration = 30;
+	public static int nightDuration = 4*60;
 	//Duration of day in seconds
-	public static int dayDuration = 60*2;
+	public static int dayDuration = 8*60;
 	//The lower bound under which a VM is considered idle and therefore terminated
 	public static double cpuIdle = 0.00;
-
+	public static String keyPath = " ";
+	
 	public static void main(String[] args) throws Exception {
 
 		AWSCredentials credentials = new PropertiesCredentials(
@@ -101,8 +106,7 @@ public class Admin {
 		AmazonCloudWatchClient cloudWatch = new AmazonCloudWatchClient(credentials);
 
 		String securityGroup = "WorkSecurity";
-		String keyName = "my_key";
-		//String keyPath = "c://";
+		String keyName = "my_key2";
 		String zone = "us-east-1a";
 		String imageId = "ami-76f0061f";
 		String bucketName = "workcluster789";//pblcluster";
@@ -115,19 +119,24 @@ public class Admin {
 		OnDemandAWS bob = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC");
 		OnDemandAWS alice = new OnDemandAWS(keyName, securityGroup, zone, imageId, "alice-PC");
 
-	/*	
+	
 		bob.createInstance();
 		alice.createInstance();
-		Thread.sleep(2*60*1000);
+		Thread.sleep(3*60*1000);
 		//Before increasing CPU ssh needs to be initialized. This takes a around 2 minutes after the cpu starts
-		increaseCPU(bob, 2);
+		increaseCPU(bob, keyName);
 
+		int count = 0;
 		while(true){
 			System.out.println(getCPUUsage(cloudWatch, bob.instanceId));
 			System.out.println(getCPUUsage(cloudWatch, alice.instanceId));
 			Thread.sleep(60*1000);
+			count++;
+			if (count>7)
+				stopCPU(bob, keyName);
 		}
-	 */
+	 
+		/*
 		List<OnDemandAWS> machines = Arrays.asList(bob, alice);
 
 		int days = 1;
@@ -150,11 +159,10 @@ public class Admin {
 				numberOfChecks = 0;
 				days++;
 
-				/*Terminate all instances*/
+				//Terminate all instances
 				for (OnDemandAWS vm : machines)
 					terminateVM(vm);
-				/*Terminate all instances*/
-
+				
 				//We have reached maximum number of days
 				if (days > maxDays)
 					break;
@@ -188,6 +196,7 @@ public class Admin {
 		cloudWatch.shutdown();
 		
 		System.out.println("EXIT Program");
+		*/
 	}
 	
 	
@@ -270,10 +279,10 @@ public class Admin {
 			CreateKeyPairRequest newKeyRequest = new CreateKeyPairRequest();
 			newKeyRequest.setKeyName(keyName);
 			CreateKeyPairResult keyresult = ec2.createKeyPair(newKeyRequest);
-			//KeyPair keyPair = new KeyPair();
-			//keyPair = keyresult.getKeyPair();
-			//String privateKey = keyPair.getKeyMaterial();
-			//writeKeytoFile(keyPath, privateKey);
+			KeyPair keyPair = new KeyPair();
+			keyPair = keyresult.getKeyPair();
+			String privateKey = keyPair.getKeyMaterial();
+			writeKeytoFile(keyName, privateKey);
 
 		} catch (AmazonServiceException ase) {
 			System.out.println("Caught Exception: " + ase.getMessage());
@@ -284,9 +293,62 @@ public class Admin {
 		}
 	}
 
-	static void increaseCPU(OnDemandAWS pc, int time) throws InterruptedException{
+	private static void writeKeytoFile(String keyName, String privateKey) {
+		FileWriter fileWriter = null;
+        try {
+            File keyFile = new File(keyName + ".pem");
+            System.out.println("Key File written to" + System.getProperty("user.dir")); 
+            keyPath = System.getProperty("user.dir"); 
+            fileWriter = new FileWriter(keyFile);
+            fileWriter.write(privateKey);
+            fileWriter.close();
+    	} catch (IOException e) {
+			e.printStackTrace();
+		} 
+		
+		
+//		try {
+//		
+//			PrintWriter out = new PrintWriter(keyName + ".pem");
+//			System.out.println("Key file at " );
+//			out.println(privateKey);
+//			out.close();
+//		}
+	
+	}
 
-		File keyfile = new File("C:/Users/Dfosak/Downloads/my_key.pem"); // or "~/.ssh/id_dsa"
+
+	static void increaseCPU(OnDemandAWS pc, String keyName) throws InterruptedException{
+
+		File keyfile = new File(keyName + ".pem"); // or "~/.ssh/id_dsa"
+		String keyfilePass = "none"; // will be ignored if not needed
+
+		try
+		{
+			Connection conn = new Connection(pc.ipAddress);
+
+			boolean isAuthenticated = conn.authenticateWithPublicKey("ec2-user", keyfile, keyfilePass);
+			if (isAuthenticated == false)
+				throw new IOException("Authentication failed.");
+
+
+			Session sess = conn.openSession();
+			System.out.println("Increasing CPU usage for " + pc.machineName);
+			sess.execCommand("while true; do true; done");
+			sess.close();
+			conn.close();
+
+		}
+		catch (IOException e)
+		{
+			e.printStackTrace(System.err);
+			System.exit(2);
+		}
+	}
+	
+	
+	static void stopCPU(OnDemandAWS pc, String keyName) throws InterruptedException{
+		File keyfile = new File(keyName + ".pem"); // or "~/.ssh/id_dsa"
 		String keyfilePass = "none"; // will be ignored if not needed
 
 		try
@@ -300,35 +362,12 @@ public class Admin {
 
 
 			Session sess = conn.openSession();
-			sess.execCommand("uname -a && date && uptime && who");
-			InputStream stdout = new StreamGobbler(sess.getStdout());
-			BufferedReader br = new BufferedReader(new InputStreamReader(stdout));
-			System.out.println("Here is some information about the remote host:");
-
-			while (true)
-			{
-				String line = br.readLine();
-				if (line == null)
-					break;
-				System.out.println(line);
-			}
-
-			/* Close this session */
-
-			sess.close();
-			br.close();
-
-			sess = conn.openSession();
-			System.out.println("Increasing CPU usage for " + time + " minutes");
-			sess.execCommand("while true; do true; done");
-			Thread.sleep(time*60*1000);
-			sess.close();
-
-			sess = conn.openSession();
 			sess.execCommand("killall bash");
 			sess.close();
 
 			conn.close();
+			
+			System.out.println("Stopped CPU on " + pc.machineName);
 
 		}
 		catch (IOException e)
@@ -336,6 +375,7 @@ public class Admin {
 			e.printStackTrace(System.err);
 			System.exit(2);
 		}
+		
 	}
 
 	public static double getCPUUsage(AmazonCloudWatchClient cloudWatch, String instanceId){	
@@ -372,21 +412,24 @@ public class Admin {
 			GetMetricStatisticsResult statResult = cloudWatch.getMetricStatistics(statRequest);
 	
 			//display
-			System.out.println(statResult.toString());
+			//System.out.println(statResult.toString());
 			List<Datapoint> dataList = statResult.getDatapoints();
 			Double averageCPU = null;
 			Date timeStamp = null;
 			for (Datapoint data : dataList){
 				averageCPU = data.getAverage();
 				timeStamp = data.getTimestamp();
-				System.out.println("Average CPU utlilization for last 1 minute since " +timeStamp.toString() + ": " +averageCPU);
-				System.out.println("Max CPU utlilization for last 1 minute since "+timeStamp.toString() + ": " + data.getMaximum());
-				System.out.println("Total CPU utlilization for last 1 minutes since "+timeStamp.toString() + ": " + data.getSum());
+				//System.out.println("Average CPU utlilization for last 1 minute since " +timeStamp.toString() + ": " +averageCPU);
+				//System.out.println("Max CPU utlilization for last 1 minute since "+timeStamp.toString() + ": " + data.getMaximum());
+				//System.out.println("Total CPU utlilization for last 1 minutes since "+timeStamp.toString() + ": " + data.getSum());
 			}
-			if (averageCPU == null)
+			if (averageCPU == null){
+				System.out.println("Average CPU utlilization for last 1 minute since " +timeStamp.toString() + ": " +averageCPU);
 				return 0;
-			else 
+			}else{ 
+				System.out.println("Average CPU utlilization for last 1 minute since " +timeStamp.toString() + ": " +averageCPU);
 				return averageCPU;
+			}
 		}catch (AmazonServiceException ase) {
 			System.out.println("Caught Exception: " + ase.getMessage());
 			System.out.println("Reponse Status Code: " + ase.getStatusCode());
@@ -398,9 +441,6 @@ public class Admin {
 	}
 
 
-	private void writeKeytoFile(String path, String privateKey) {
-
-	}
 
 	public static void createBucket(AmazonS3Client s3, String bucketName, String zone){
 		try{
