@@ -34,12 +34,14 @@ import com.amazonaws.services.autoscaling.AmazonAutoScalingClient;
 import com.amazonaws.services.autoscaling.model.CreateAutoScalingGroupRequest;
 import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
 import com.amazonaws.services.autoscaling.model.PutScalingPolicyRequest;
+import com.amazonaws.services.autoscaling.model.PutScalingPolicyResult;
 //import com.amazonaws.services.dynamodb.datamodeling.KeyPair;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.cloudwatch.model.Datapoint;
 import com.amazonaws.services.cloudwatch.model.Dimension;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
+import com.amazonaws.services.cloudwatch.model.PutMetricAlarmRequest;
 import com.amazonaws.services.ec2.model.AllocateAddressResult;
 import com.amazonaws.services.ec2.model.AssociateAddressRequest;
 import com.amazonaws.services.ec2.model.DisassociateAddressRequest;
@@ -543,7 +545,7 @@ public class Admin {
 		ec2.authorizeSecurityGroupIngress(authorizeSecurityGroupIngressRequest);
 	}
 	
-	  public  void setupAutoScale(AmazonAutoScalingClient autoScale, OnDemandAWS vm) {
+	  public  void setupAutoScale(AmazonAutoScalingClient autoScale, AmazonCloudWatchClient cloudWatch, OnDemandAWS vm) {
 		  
 		
 	    	
@@ -565,6 +567,7 @@ public class Admin {
 			autoReq.setMinSize(2);
 			autoReq.setMaxSize(2);
 			autoReq.setAutoScalingGroupName("On Demand AS Group");
+			
 			autoScale.createAutoScalingGroup(autoReq);
 			
 			PutScalingPolicyRequest policyReq = new PutScalingPolicyRequest();
@@ -572,8 +575,28 @@ public class Admin {
 			policyReq.setAutoScalingGroupName("On Demand AS Group");
 			policyReq.setAdjustmentType("ChangeInCapacity");
 			policyReq.setCooldown(60);
-			policyReq.setScalingAdjustment(1);			
-			autoScale.putScalingPolicy(policyReq);
+			policyReq.setScalingAdjustment(1);
+			PutScalingPolicyResult arn = autoScale.putScalingPolicy(policyReq);
+			
+			
+						
+			PutMetricAlarmRequest putMetricAlarmRequest = new PutMetricAlarmRequest();
+			putMetricAlarmRequest.setMetricName("HighCPUAlarm");
+			putMetricAlarmRequest.setComparisonOperator("GreaterThanOrEqualToThreshold");
+			putMetricAlarmRequest.setEvaluationPeriods(1);
+			putMetricAlarmRequest.setMetricName("CPUUtilization");
+			putMetricAlarmRequest.setNamespace("AWS/EC2");
+			putMetricAlarmRequest.setPeriod(30);
+			putMetricAlarmRequest.setStatistic("Average");
+			putMetricAlarmRequest.setThreshold((double) 50);
+			List<String> arnList = new ArrayList<String>();
+			arnList.add(arn.getPolicyARN());
+			putMetricAlarmRequest.setAlarmActions(arnList);
+			
+			
+			
+			cloudWatch.putMetricAlarm(putMetricAlarmRequest);
+			
 			
 		}
 }
