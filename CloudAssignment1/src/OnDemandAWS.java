@@ -102,7 +102,6 @@ public class OnDemandAWS {
 		this.zone = zone;
 		this.imageId= imageId;
 		this.machineName= machineName;
-		this.createEBS(10);		
 	}
 	
 	public void createInstance() {
