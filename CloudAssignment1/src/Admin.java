@@ -33,6 +33,7 @@ import com.amazonaws.auth.PropertiesCredentials;
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient;
 import com.amazonaws.services.autoscaling.model.CreateAutoScalingGroupRequest;
 import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
+import com.amazonaws.services.autoscaling.model.LaunchConfiguration;
 import com.amazonaws.services.autoscaling.model.PutScalingPolicyRequest;
 import com.amazonaws.services.autoscaling.model.PutScalingPolicyResult;
 //import com.amazonaws.services.dynamodb.datamodeling.KeyPair;
@@ -123,7 +124,7 @@ public class Admin {
 		createKey(keyName, ec2);
 		createBucket(s3, bucketName, zone);
 		setupAutoScale(autoScale, cloudWatch, keyName, zone, securityGroup, imageId);
-
+		setupPolicy(autoScale, cloudWatch);
 
 		OnDemandAWS bob = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC");
 		OnDemandAWS alice = new OnDemandAWS(keyName, securityGroup, zone, imageId, "alice-PC");
@@ -134,6 +135,7 @@ public class Admin {
 		Thread.sleep(2*60*1000);
 		//Before increasing CPU ssh needs to be initialized. This takes a around 2 minutes after the cpu starts
 		increaseCPU(bob, keyName);
+		increaseCPU(alice, keyName);
 
 		int count = 0;
 		while(true){
@@ -141,8 +143,10 @@ public class Admin {
 			System.out.println("alice cpu = " + getCPUUsage(cloudWatch, alice.instanceId));
 			Thread.sleep(60*1000);
 			count++;
-			if (count>7)
+			if (count>3){
 				stopCPU(bob, keyName);
+				stopCPU(alice, keyName);
+			}
 		}
 	 
 		/*
@@ -556,8 +560,16 @@ public class Admin {
 	private static void setupAutoScale(AmazonAutoScalingClient autoScale,	AmazonCloudWatchClient cloudWatch, 
 			String keyName, String zone, String securityGroup, String imageId) {
 		  
-		
+	
+		List <LaunchConfiguration> launchList = autoScale.describeLaunchConfigurations().getLaunchConfigurations();
+		for (LaunchConfiguration ll : launchList)
+			if ( ll.getLaunchConfigurationName().equalsIgnoreCase("On DemandAWS") ){
+				System.out.println("Using Launch Configuration " + ll.getLaunchConfigurationName());
+				return;
+				
+			}
 	    	
+	
 	    	CreateLaunchConfigurationRequest launchConfig = new CreateLaunchConfigurationRequest();
 	    	launchConfig.setImageId(imageId);
 	    	launchConfig.setKeyName(keyName);
@@ -579,59 +591,64 @@ public class Admin {
 			autoReq.setAutoScalingGroupName("OnDemand ASGroup");
 			autoScale.createAutoScalingGroup(autoReq);
 			
-			
-			PutScalingPolicyRequest policyReq = new PutScalingPolicyRequest();
-			policyReq.setPolicyName("On Demand Scale Up Policy");
-			policyReq.setAutoScalingGroupName("OnDemand ASGroup");
-			policyReq.setAdjustmentType("ChangeInCapacity");
-			policyReq.setCooldown(60);
-			policyReq.setScalingAdjustment(1);
-			PutScalingPolicyResult arn_up = autoScale.putScalingPolicy(policyReq);
-			
-									
-			PutMetricAlarmRequest putMetricAlarmRequest = new PutMetricAlarmRequest();
-			putMetricAlarmRequest.setMetricName("HighCPUAlarm");
-			putMetricAlarmRequest.setComparisonOperator("GreaterThanOrEqualToThreshold");
-			putMetricAlarmRequest.setEvaluationPeriods(1);
-			putMetricAlarmRequest.setMetricName("CPUUtilization");
-			putMetricAlarmRequest.setNamespace("AWS/EC2");
-			putMetricAlarmRequest.setPeriod(120);
-			putMetricAlarmRequest.setStatistic("Average");
-			putMetricAlarmRequest.setThreshold(50.0);
-			List<String> arnList = new ArrayList<String>();
-			arnList.add(arn_up.getPolicyARN());
-			putMetricAlarmRequest.setAlarmActions(arnList);
-			putMetricAlarmRequest.setAlarmName("On Demand Alarm");
-			
-			cloudWatch.putMetricAlarm(putMetricAlarmRequest);
-			
-			policyReq = new PutScalingPolicyRequest();
-			policyReq.setPolicyName("On Demand Scale Down Policy");
-			policyReq.setAutoScalingGroupName("OnDemand ASGroup");
-			policyReq.setAdjustmentType("ChangeInCapacity");
-			policyReq.setCooldown(60);
-			policyReq.setScalingAdjustment(-1);
-			PutScalingPolicyResult arn_down = autoScale.putScalingPolicy(policyReq);
-			
-			putMetricAlarmRequest = new PutMetricAlarmRequest();
-			putMetricAlarmRequest.setMetricName("LowCPUAlarm");
-			putMetricAlarmRequest.setComparisonOperator("LessThanOrEqualToThreshold");
-			putMetricAlarmRequest.setEvaluationPeriods(1);
-			putMetricAlarmRequest.setMetricName("CPUUtilization");
-			putMetricAlarmRequest.setNamespace("AWS/EC2");
-			putMetricAlarmRequest.setPeriod(120);
-			putMetricAlarmRequest.setStatistic("Average");
-			putMetricAlarmRequest.setThreshold(1.0);
-			List<String> arnList2 = new ArrayList<String>();
-			arnList2.add(arn_down.getPolicyARN());
-			putMetricAlarmRequest.setAlarmActions(arnList2);
-			putMetricAlarmRequest.setAlarmName("On Demand Alarm");
-			
-			
-			
-			cloudWatch.putMetricAlarm(putMetricAlarmRequest);
-			
-			System.out.println("Setup autoscaler to monitor average CPU Usage");
+			System.out.println("Using Launch Configuration On DemandAWS created" );
+		
 			
 		}
+	
+	private static void setupPolicy(AmazonAutoScalingClient autoScale,	AmazonCloudWatchClient cloudWatch) {
+		
+		PutScalingPolicyRequest policyReq = new PutScalingPolicyRequest();
+		policyReq.setPolicyName("On Demand Scale Up Policy");
+		policyReq.setAutoScalingGroupName("OnDemand ASGroup");
+		policyReq.setAdjustmentType("ChangeInCapacity");
+		policyReq.setCooldown(60);
+		policyReq.setScalingAdjustment(1);
+		PutScalingPolicyResult arn_up = autoScale.putScalingPolicy(policyReq);
+		
+								
+		PutMetricAlarmRequest putMetricAlarmRequest = new PutMetricAlarmRequest();
+		putMetricAlarmRequest.setMetricName("HighCPUAlarm");
+		putMetricAlarmRequest.setComparisonOperator("GreaterThanOrEqualToThreshold");
+		putMetricAlarmRequest.setEvaluationPeriods(1);
+		putMetricAlarmRequest.setMetricName("CPUUtilization");
+		putMetricAlarmRequest.setNamespace("AWS/EC2");
+		putMetricAlarmRequest.setPeriod(120);
+		putMetricAlarmRequest.setStatistic("Average");
+		putMetricAlarmRequest.setThreshold(50.0);
+		List<String> arnList = new ArrayList<String>();
+		arnList.add(arn_up.getPolicyARN());
+		putMetricAlarmRequest.setAlarmActions(arnList);
+		putMetricAlarmRequest.setAlarmName("On Demand Alarm");
+		
+		cloudWatch.putMetricAlarm(putMetricAlarmRequest);
+		
+		policyReq = new PutScalingPolicyRequest();
+		policyReq.setPolicyName("On Demand Scale Down Policy");
+		policyReq.setAutoScalingGroupName("OnDemand ASGroup");
+		policyReq.setAdjustmentType("ChangeInCapacity");
+		policyReq.setCooldown(60);
+		policyReq.setScalingAdjustment(-1);
+		PutScalingPolicyResult arn_down = autoScale.putScalingPolicy(policyReq);
+		
+		putMetricAlarmRequest = new PutMetricAlarmRequest();
+		putMetricAlarmRequest.setMetricName("LowCPUAlarm");
+		putMetricAlarmRequest.setComparisonOperator("LessThanOrEqualToThreshold");
+		putMetricAlarmRequest.setEvaluationPeriods(1);
+		putMetricAlarmRequest.setMetricName("CPUUtilization");
+		putMetricAlarmRequest.setNamespace("AWS/EC2");
+		putMetricAlarmRequest.setPeriod(120);
+		putMetricAlarmRequest.setStatistic("Average");
+		putMetricAlarmRequest.setThreshold(1.0);
+		List<String> arnList2 = new ArrayList<String>();
+		arnList2.add(arn_down.getPolicyARN());
+		putMetricAlarmRequest.setAlarmActions(arnList2);
+		putMetricAlarmRequest.setAlarmName("On Demand Alarm");
+		
+		
+		
+		cloudWatch.putMetricAlarm(putMetricAlarmRequest);
+		
+		System.out.println("Setup autoscaler to monitor average CPU Usage");
+	}
 }
