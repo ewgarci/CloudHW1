@@ -619,7 +619,7 @@ public class Admin {
 		List<String> arnList = new ArrayList<String>();
 		arnList.add(arn_up.getPolicyARN());
 		putMetricAlarmRequest.setAlarmActions(arnList);
-		putMetricAlarmRequest.setAlarmName("On Demand Alarm");
+		putMetricAlarmRequest.setAlarmName("On Demand Alarm Up");
 		
 		cloudWatch.putMetricAlarm(putMetricAlarmRequest);
 		
@@ -639,11 +639,11 @@ public class Admin {
 		putMetricAlarmRequest.setNamespace("AWS/EC2");
 		putMetricAlarmRequest.setPeriod(120);
 		putMetricAlarmRequest.setStatistic("Average");
-		putMetricAlarmRequest.setThreshold(1.0);
+		putMetricAlarmRequest.setThreshold(4.0);
 		List<String> arnList2 = new ArrayList<String>();
 		arnList2.add(arn_down.getPolicyARN());
 		putMetricAlarmRequest.setAlarmActions(arnList2);
-		putMetricAlarmRequest.setAlarmName("On Demand Alarm");
+		putMetricAlarmRequest.setAlarmName("On Demand Alarm Down");
 		
 		
 		
