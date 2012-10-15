@@ -30,6 +30,10 @@ import ch.ethz.ssh2.StreamGobbler;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.PropertiesCredentials;
+import com.amazonaws.services.autoscaling.AmazonAutoScalingClient;
+import com.amazonaws.services.autoscaling.model.CreateAutoScalingGroupRequest;
+import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
+import com.amazonaws.services.autoscaling.model.PutScalingPolicyRequest;
 //import com.amazonaws.services.dynamodb.datamodeling.KeyPair;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.cloudwatch.model.Datapoint;
@@ -102,6 +106,7 @@ public class Admin {
 				Admin.class.getResourceAsStream("AwsCredentials.properties"));
 		AmazonEC2 ec2 = new AmazonEC2Client(credentials);
 		AmazonS3Client s3  = new AmazonS3Client(credentials);
+		AmazonAutoScalingClient autoScale  = new AmazonAutoScalingClient(credentials);
 
 		AmazonCloudWatchClient cloudWatch = new AmazonCloudWatchClient(credentials);
 
@@ -122,14 +127,14 @@ public class Admin {
 	
 		bob.createInstance();
 		alice.createInstance();
-		Thread.sleep(3*60*1000);
+		Thread.sleep(2*60*1000);
 		//Before increasing CPU ssh needs to be initialized. This takes a around 2 minutes after the cpu starts
 		increaseCPU(bob, keyName);
 
 		int count = 0;
 		while(true){
-			System.out.println(getCPUUsage(cloudWatch, bob.instanceId));
-			System.out.println(getCPUUsage(cloudWatch, alice.instanceId));
+			System.out.println("bob cpu = " + getCPUUsage(cloudWatch, bob.instanceId));
+			System.out.println("alice cpu = " + getCPUUsage(cloudWatch, alice.instanceId));
 			Thread.sleep(60*1000);
 			count++;
 			if (count>7)
@@ -238,6 +243,7 @@ public class Admin {
 		machine.startUpOnDemandAWS();
 		System.out.println("Attach EBS");
 		machine.attachEBS();
+		System.out.println("Attach S3");
 		machine.attachS3(bucketName);
 		System.out.println("Machine created.");		
 	}
@@ -326,6 +332,7 @@ public class Admin {
 		try
 		{
 			Connection conn = new Connection(pc.ipAddress);
+			conn.connect();
 
 			boolean isAuthenticated = conn.authenticateWithPublicKey("ec2-user", keyfile, keyfilePass);
 			if (isAuthenticated == false)
@@ -342,7 +349,7 @@ public class Admin {
 		catch (IOException e)
 		{
 			e.printStackTrace(System.err);
-			System.exit(2);
+			System.out.println("Please use the attached script to start and stop cpu remotely");
 		}
 	}
 	
@@ -373,7 +380,7 @@ public class Admin {
 		catch (IOException e)
 		{
 			e.printStackTrace(System.err);
-			System.exit(2);
+			System.out.println("Please use the attached script to start and stop cpu remotely");
 		}
 		
 	}
@@ -424,7 +431,7 @@ public class Admin {
 				//System.out.println("Total CPU utlilization for last 1 minutes since "+timeStamp.toString() + ": " + data.getSum());
 			}
 			if (averageCPU == null){
-				System.out.println("Average CPU utlilization for last 1 minute since " +timeStamp.toString() + ": " +averageCPU);
+				System.out.println("Average CPU utlilization for last 1 minute: 0" );
 				return 0;
 			}else{ 
 				System.out.println("Average CPU utlilization for last 1 minute since " +timeStamp.toString() + ": " +averageCPU);
@@ -535,4 +542,38 @@ public class Admin {
 
 		ec2.authorizeSecurityGroupIngress(authorizeSecurityGroupIngressRequest);
 	}
+	
+	  public  void setupAutoScale(AmazonAutoScalingClient autoScale, OnDemandAWS vm) {
+		  
+		
+	    	
+	    	CreateLaunchConfigurationRequest launchConfig = new CreateLaunchConfigurationRequest();
+	    	launchConfig.setImageId(vm.imageId);
+	    	launchConfig.setKeyName(vm.keyName);
+	    	 List<String> securityGroups = new ArrayList<String>();
+	     	securityGroups.add(vm.securityGroup);
+	    	launchConfig.setSecurityGroups(securityGroups);
+	    	launchConfig.setLaunchConfigurationName("On Demand AWS");
+	    	autoScale.createLaunchConfiguration(launchConfig);
+	    	
+	    	
+	    	CreateAutoScalingGroupRequest autoReq = new CreateAutoScalingGroupRequest();
+	    	autoReq.setLaunchConfigurationName("On Demand AWS");
+			List<String> availabilityZones = new ArrayList<String>();
+			availabilityZones.add(vm.zone);
+			autoReq.setAvailabilityZones(availabilityZones);
+			autoReq.setMinSize(2);
+			autoReq.setMaxSize(2);
+			autoReq.setAutoScalingGroupName("On Demand AS Group");
+			autoScale.createAutoScalingGroup(autoReq);
+			
+			PutScalingPolicyRequest policyReq = new PutScalingPolicyRequest();
+			policyReq.setPolicyName("On Demand Policy");
+			policyReq.setAutoScalingGroupName("On Demand AS Group");
+			policyReq.setAdjustmentType("ChangeInCapacity");
+			policyReq.setCooldown(60);
+			policyReq.setScalingAdjustment(1);			
+			autoScale.putScalingPolicy(policyReq);
+			
+		}
 }

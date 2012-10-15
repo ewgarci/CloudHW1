@@ -20,6 +20,9 @@ import java.io.Writer;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.PropertiesCredentials;
+import com.amazonaws.services.autoscaling.AmazonAutoScalingClient;
+import com.amazonaws.services.autoscaling.model.CreateAutoScalingGroupRequest;
+import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.cloudwatch.model.Datapoint;
 import com.amazonaws.services.cloudwatch.model.Dimension;
@@ -342,6 +345,42 @@ public class OnDemandAWS {
     	if (ins == null || ins.getState().getCode() > 16) 
     		return true;
     	return false;
+    }
+    
+    public  void setupAutoScale() {
+    	AmazonAutoScalingClient autoScale  = new AmazonAutoScalingClient(credentials);
+    	
+    	CreateLaunchConfigurationRequest launchConfig = new CreateLaunchConfigurationRequest();
+    	launchConfig.setImageId(this.imageId);
+    	launchConfig.setKeyName(this.keyName);
+    	 List<String> securityGroups = new ArrayList<String>();
+     	securityGroups.add(this.securityGroup);
+    	launchConfig.setSecurityGroups(securityGroups);
+    	launchConfig.setLaunchConfigurationName("On Demand AWS");
+    	autoScale.createLaunchConfiguration(launchConfig);
+    	
+    	
+    	CreateAutoScalingGroupRequest autoReq = new CreateAutoScalingGroupRequest();
+    
+		autoReq.setLaunchConfigurationName("On Demand AWS");
+		List<String> availabilityZones = new ArrayList<String>();
+		availabilityZones.add(this.zone);
+		autoReq.setAvailabilityZones(availabilityZones);
+		autoReq.setMinSize(2);
+		autoReq.setMaxSize(2);
+		
+		
+    	
+    	autoScale.createAutoScalingGroup(autoReq);
+  
+    	
+    	
+    	
+    	
+    	
+    	
+    	
+    	
     }
     
 }
