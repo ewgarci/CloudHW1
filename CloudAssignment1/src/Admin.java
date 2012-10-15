@@ -104,6 +104,11 @@ public class Admin {
 	public static double cpuIdle = 0.00;
 	public static String keyPath = " ";
 	
+	//Upper threshold
+	public static double upperT = 50.0;	
+	//Lower threshold
+	public static double lowerT = 20.0;
+	
 	public static void main(String[] args) throws Exception {
 
 		AWSCredentials credentials = new PropertiesCredentials(
@@ -127,10 +132,15 @@ public class Admin {
 		setupPolicy(autoScale, cloudWatch);
 
 		OnDemandAWS bob = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC");
+		bob.createEBS(10);
 		OnDemandAWS alice = new OnDemandAWS(keyName, securityGroup, zone, imageId, "alice-PC");
+		alice.createEBS(10);
+		
+		//For Auto Scaling
+		//OnDemandAWS bob2 = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC-2");
 
 	
-		bob.createInstance();
+		/*bob.createInstance();
 		alice.createInstance();
 		Thread.sleep(2*60*1000);
 		//Before increasing CPU ssh needs to be initialized. This takes a around 2 minutes after the cpu starts
@@ -147,9 +157,9 @@ public class Admin {
 				stopCPU(bob, keyName);
 				stopCPU(alice, keyName);
 			}
-		}
+		}*/
 	 
-		/*
+
 		List<OnDemandAWS> machines = Arrays.asList(bob, alice);
 
 		int days = 1;
@@ -163,6 +173,13 @@ public class Admin {
 				//Create all instances and start them up;
 				for (OnDemandAWS vm : machines)
 					createAndStartUpVM(vm, bucketName);
+				
+				
+				Thread.sleep(2*60*1000);
+				//Before increasing CPU ssh needs to be initialized. This takes a around 2 minutes after the cpu starts
+				System.out.println("Increase CPU");
+				increaseCPU(bob, keyName);
+				increaseCPU(alice, keyName);
 
 				System.out.println("All machines are created.");	
 				//Sleep for 30sec before pinging CloudWatch for the first time
@@ -176,6 +193,9 @@ public class Admin {
 				for (OnDemandAWS vm : machines)
 					terminateVM(vm);
 				
+				//if(!bob2.getIsTerminated(false))
+				//	bob2.shutDownOnDemandAWS();
+				
 				//We have reached maximum number of days
 				if (days > maxDays)
 					break;
@@ -188,6 +208,11 @@ public class Admin {
 
 			//See which machine is used a lot and try to auto-scale and which one is not used and kill it.
 			numberOfChecks++;
+			
+			if (numberOfChecks>3){
+				stopCPU(bob, keyName);
+				stopCPU(alice, keyName);
+			}
 
 			//Terminate idle machines
 			for (OnDemandAWS vm : machines)
@@ -196,6 +221,9 @@ public class Admin {
 					System.out.println(vm.machineName + " is IDLE and terminated");
 				}
 			
+			
+			////Auto-scale code
+			//autoScale(bob2, getCPUUsage(cloudWatch, bob.instanceId));
 			
 			System.out.println("Check: " + numberOfChecks);
 
@@ -209,7 +237,6 @@ public class Admin {
 		cloudWatch.shutdown();
 		
 		System.out.println("EXIT Program");
-		*/
 	}
 	
 	
@@ -219,7 +246,7 @@ public class Admin {
 	}
 
 	private static Boolean isEndOfDay(int numberOfChecks){
-		return numberOfChecks > 3;
+		return numberOfChecks *pingCW > dayDuration;
 	}
 	
 	//Checks if the CPU of a machine is idle
@@ -279,7 +306,17 @@ public class Admin {
 		machine.shutDownOnDemandAWS();
 	}
 
-
+	private static void autoScale(OnDemandAWS bob2, double current) {
+		Boolean isTerminated = bob2.getIsTerminated(true);
+		
+		if (bob2.getIsTerminated(true) && current >= upperT) {
+			bob2.createInstance();
+			System.out.println("Autoscale machine created.");	
+		} else if (!isTerminated && current < lowerT) {
+			bob2.shutDownOnDemandAWS();
+			System.out.println("Autoscale machine terminated.");
+		}
+	}
 
 	private static void createKey(String keyName, AmazonEC2 ec2){
 		try {
