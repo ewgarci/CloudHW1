@@ -62,6 +62,7 @@ import com.amazonaws.services.ec2.model.DescribeImagesResult;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.DescribeKeyPairsResult;
 import com.amazonaws.services.ec2.model.Image;
+import com.amazonaws.services.ec2.model.InstanceType;
 import com.amazonaws.services.ec2.model.KeyPairInfo;
 import com.amazonaws.services.ec2.model.Placement;
 import com.amazonaws.services.ec2.model.Instance;
@@ -121,6 +122,7 @@ public class Admin {
 		createSecurityGroup(ec2, securityGroup);
 		createKey(keyName, ec2);
 		createBucket(s3, bucketName, zone);
+		setupAutoScale(autoScale, cloudWatch, keyName, zone, securityGroup, imageId);
 
 
 		OnDemandAWS bob = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC");
@@ -279,11 +281,12 @@ public class Admin {
 		try {
 			List<KeyPairInfo> keyPairList = ec2.describeKeyPairs().getKeyPairs();
 			for (KeyPairInfo keyPair : keyPairList){
-				//System.out.println(keyPair.getKeyName());
 				if ( keyName.equalsIgnoreCase(keyPair.getKeyName()) ){
+					System.out.println("Using key " + keyName);
 					return;
 				}
 			}
+			System.out.println("Creating key " + keyName + "in local directory");
 			CreateKeyPairRequest newKeyRequest = new CreateKeyPairRequest();
 			newKeyRequest.setKeyName(keyName);
 			CreateKeyPairResult keyresult = ec2.createKeyPair(newKeyRequest);
@@ -458,11 +461,13 @@ public class Admin {
 
 			for (Bucket bucket : bucketList){
 				//System.out.println(bucket.getName());
-				if ( bucketName == bucket.getName() ){
+				if ( bucketName.equalsIgnoreCase(bucket.getName() )){
+					System.out.println("Using bucket " + bucketName );
 					return;
 				}
 			}
 
+			System.out.println("Created s3 bucket " + bucketName );
 			s3.createBucket(bucketName);
 
 			return;	
@@ -482,6 +487,7 @@ public class Admin {
 		for (SecurityGroup secGroup : secGroupList){
 			//System.out.println(secGroup.getGroupName());
 			if ( securityGroup.equalsIgnoreCase(secGroup.getGroupName()) ){
+				System.out.println("Using Security Group " + securityGroup);
 				return;
 			}
 		}
@@ -543,60 +549,89 @@ public class Admin {
 		.withIpPermissions(permissions);
 
 		ec2.authorizeSecurityGroupIngress(authorizeSecurityGroupIngressRequest);
+		
+		System.out.println("Created Security Group " + securityGroup);
 	}
 	
-	  public  void setupAutoScale(AmazonAutoScalingClient autoScale, AmazonCloudWatchClient cloudWatch, OnDemandAWS vm) {
+	private static void setupAutoScale(AmazonAutoScalingClient autoScale,	AmazonCloudWatchClient cloudWatch, 
+			String keyName, String zone, String securityGroup, String imageId) {
 		  
 		
 	    	
 	    	CreateLaunchConfigurationRequest launchConfig = new CreateLaunchConfigurationRequest();
-	    	launchConfig.setImageId(vm.imageId);
-	    	launchConfig.setKeyName(vm.keyName);
+	    	launchConfig.setImageId(imageId);
+	    	launchConfig.setKeyName(keyName);
+	    	launchConfig.setInstanceType("t1.micro");
 	    	 List<String> securityGroups = new ArrayList<String>();
-	     	securityGroups.add(vm.securityGroup);
+	     	securityGroups.add(securityGroup);
 	    	launchConfig.setSecurityGroups(securityGroups);
-	    	launchConfig.setLaunchConfigurationName("On Demand AWS");
+	    	launchConfig.setLaunchConfigurationName("On DemandAWS");
 	    	autoScale.createLaunchConfiguration(launchConfig);
 	    	
 	    	
 	    	CreateAutoScalingGroupRequest autoReq = new CreateAutoScalingGroupRequest();
-	    	autoReq.setLaunchConfigurationName("On Demand AWS");
+	    	autoReq.setLaunchConfigurationName("On DemandAWS");
 			List<String> availabilityZones = new ArrayList<String>();
-			availabilityZones.add(vm.zone);
+			availabilityZones.add(zone);
 			autoReq.setAvailabilityZones(availabilityZones);
-			autoReq.setMinSize(2);
-			autoReq.setMaxSize(2);
-			autoReq.setAutoScalingGroupName("On Demand AS Group");
-			
+			autoReq.setMinSize(1);
+			autoReq.setMaxSize(1);
+			autoReq.setAutoScalingGroupName("OnDemand ASGroup");
 			autoScale.createAutoScalingGroup(autoReq);
 			
+			
 			PutScalingPolicyRequest policyReq = new PutScalingPolicyRequest();
-			policyReq.setPolicyName("On Demand Policy");
-			policyReq.setAutoScalingGroupName("On Demand AS Group");
+			policyReq.setPolicyName("On Demand Scale Up Policy");
+			policyReq.setAutoScalingGroupName("OnDemand ASGroup");
 			policyReq.setAdjustmentType("ChangeInCapacity");
 			policyReq.setCooldown(60);
 			policyReq.setScalingAdjustment(1);
-			PutScalingPolicyResult arn = autoScale.putScalingPolicy(policyReq);
+			PutScalingPolicyResult arn_up = autoScale.putScalingPolicy(policyReq);
 			
-			
-						
+									
 			PutMetricAlarmRequest putMetricAlarmRequest = new PutMetricAlarmRequest();
 			putMetricAlarmRequest.setMetricName("HighCPUAlarm");
 			putMetricAlarmRequest.setComparisonOperator("GreaterThanOrEqualToThreshold");
 			putMetricAlarmRequest.setEvaluationPeriods(1);
 			putMetricAlarmRequest.setMetricName("CPUUtilization");
 			putMetricAlarmRequest.setNamespace("AWS/EC2");
-			putMetricAlarmRequest.setPeriod(30);
+			putMetricAlarmRequest.setPeriod(120);
 			putMetricAlarmRequest.setStatistic("Average");
-			putMetricAlarmRequest.setThreshold((double) 50);
+			putMetricAlarmRequest.setThreshold(50.0);
 			List<String> arnList = new ArrayList<String>();
-			arnList.add(arn.getPolicyARN());
+			arnList.add(arn_up.getPolicyARN());
 			putMetricAlarmRequest.setAlarmActions(arnList);
+			putMetricAlarmRequest.setAlarmName("On Demand Alarm");
+			
+			cloudWatch.putMetricAlarm(putMetricAlarmRequest);
+			
+			policyReq = new PutScalingPolicyRequest();
+			policyReq.setPolicyName("On Demand Scale Down Policy");
+			policyReq.setAutoScalingGroupName("OnDemand ASGroup");
+			policyReq.setAdjustmentType("ChangeInCapacity");
+			policyReq.setCooldown(60);
+			policyReq.setScalingAdjustment(-1);
+			PutScalingPolicyResult arn_down = autoScale.putScalingPolicy(policyReq);
+			
+			putMetricAlarmRequest = new PutMetricAlarmRequest();
+			putMetricAlarmRequest.setMetricName("LowCPUAlarm");
+			putMetricAlarmRequest.setComparisonOperator("LessThanOrEqualToThreshold");
+			putMetricAlarmRequest.setEvaluationPeriods(1);
+			putMetricAlarmRequest.setMetricName("CPUUtilization");
+			putMetricAlarmRequest.setNamespace("AWS/EC2");
+			putMetricAlarmRequest.setPeriod(120);
+			putMetricAlarmRequest.setStatistic("Average");
+			putMetricAlarmRequest.setThreshold(1.0);
+			List<String> arnList2 = new ArrayList<String>();
+			arnList2.add(arn_down.getPolicyARN());
+			putMetricAlarmRequest.setAlarmActions(arnList2);
+			putMetricAlarmRequest.setAlarmName("On Demand Alarm");
 			
 			
 			
 			cloudWatch.putMetricAlarm(putMetricAlarmRequest);
 			
+			System.out.println("Setup autoscaler to monitor average CPU Usage");
 			
 		}
 }

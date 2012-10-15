@@ -23,6 +23,8 @@ import com.amazonaws.auth.PropertiesCredentials;
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient;
 import com.amazonaws.services.autoscaling.model.CreateAutoScalingGroupRequest;
 import com.amazonaws.services.autoscaling.model.CreateLaunchConfigurationRequest;
+import com.amazonaws.services.autoscaling.model.ExecutePolicyRequest;
+import com.amazonaws.services.autoscaling.model.PutScalingPolicyRequest;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.cloudwatch.model.Datapoint;
 import com.amazonaws.services.cloudwatch.model.Dimension;
@@ -164,7 +166,7 @@ public class OnDemandAWS {
             this.assignElasticIp();
             
             isTerminated = false;
-            System.out.println(machineName + " id = " + this.instanceId + " ip = " + this.ipAddress + " AMI = " + this.imageId);
+            System.out.println("Created " + machineName + " with id = " + this.instanceId + " ip = " + this.ipAddress + " and AMI = " + this.imageId);
            
 			
 		} catch (AmazonServiceException ase) {
@@ -347,40 +349,6 @@ public class OnDemandAWS {
     	return false;
     }
     
-    public  void setupAutoScale() {
-    	AmazonAutoScalingClient autoScale  = new AmazonAutoScalingClient(credentials);
-    	
-    	CreateLaunchConfigurationRequest launchConfig = new CreateLaunchConfigurationRequest();
-    	launchConfig.setImageId(this.imageId);
-    	launchConfig.setKeyName(this.keyName);
-    	 List<String> securityGroups = new ArrayList<String>();
-     	securityGroups.add(this.securityGroup);
-    	launchConfig.setSecurityGroups(securityGroups);
-    	launchConfig.setLaunchConfigurationName("On Demand AWS");
-    	autoScale.createLaunchConfiguration(launchConfig);
-    	
-    	
-    	CreateAutoScalingGroupRequest autoReq = new CreateAutoScalingGroupRequest();
-    
-		autoReq.setLaunchConfigurationName("On Demand AWS");
-		List<String> availabilityZones = new ArrayList<String>();
-		availabilityZones.add(this.zone);
-		autoReq.setAvailabilityZones(availabilityZones);
-		autoReq.setMinSize(2);
-		autoReq.setMaxSize(2);
-		
-		
-    	
-    	autoScale.createAutoScalingGroup(autoReq);
   
-    	
-    	
-    	
-    	
-    	
-    	
-    	
-    	
-    }
     
 }
