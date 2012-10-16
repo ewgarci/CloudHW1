@@ -115,7 +115,7 @@ public class Admin {
 				Admin.class.getResourceAsStream("AwsCredentials.properties"));
 		AmazonEC2 ec2 = new AmazonEC2Client(credentials);
 		AmazonS3Client s3  = new AmazonS3Client(credentials);
-		AmazonAutoScalingClient autoScale  = new AmazonAutoScalingClient(credentials);
+		//AmazonAutoScalingClient autoScale  = new AmazonAutoScalingClient(credentials);
 
 		AmazonCloudWatchClient cloudWatch = new AmazonCloudWatchClient(credentials);
 
@@ -123,13 +123,13 @@ public class Admin {
 		String keyName = "my_key2";
 		String zone = "us-east-1a";
 		String imageId = "ami-76f0061f";
-		String bucketName = "workcluster789";//pblcluster";
+		String bucketName = "pblcluster";//pblcluster workcluster789";
 
 		createSecurityGroup(ec2, securityGroup);
 		createKey(keyName, ec2);
 		createBucket(s3, bucketName, zone);
-		setupAutoScale(autoScale, cloudWatch, keyName, zone, securityGroup, imageId);
-		setupPolicy(autoScale, cloudWatch);
+		//setupAutoScale(autoScale, cloudWatch, keyName, zone, securityGroup, imageId);
+		//setupPolicy(autoScale, cloudWatch);
 
 		OnDemandAWS bob = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC");
 		bob.createEBS(10);
@@ -137,7 +137,7 @@ public class Admin {
 		alice.createEBS(10);
 		
 		//For Auto Scaling
-		//OnDemandAWS bob2 = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC-2");
+		OnDemandAWS bob2 = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC-2");
 
 	
 		/*bob.createInstance();
@@ -193,8 +193,8 @@ public class Admin {
 				for (OnDemandAWS vm : machines)
 					terminateVM(vm);
 				
-				//if(!bob2.getIsTerminated(false))
-				//	bob2.shutDownOnDemandAWS();
+				if(!bob2.getIsTerminated(false))
+					bob2.shutDownOnDemandAWS();
 				
 				//We have reached maximum number of days
 				if (days > maxDays)
@@ -222,8 +222,8 @@ public class Admin {
 				}
 			
 			
-			////Auto-scale code
-			//autoScale(bob2, getCPUUsage(cloudWatch, bob.instanceId));
+			//Auto-scale code
+			autoScale(bob2, getCPUUsage(cloudWatch, bob.instanceId));
 			
 			System.out.println("Check: " + numberOfChecks);
 
@@ -307,9 +307,9 @@ public class Admin {
 	}
 
 	private static void autoScale(OnDemandAWS bob2, double current) {
-		Boolean isTerminated = bob2.getIsTerminated(true);
+		Boolean isTerminated = bob2.getIsTerminated(false);
 		
-		if (bob2.getIsTerminated(true) && current >= upperT) {
+		if (bob2.getIsTerminated(false) && current >= upperT) {
 			bob2.createInstance();
 			System.out.println("Autoscale machine created.");	
 		} else if (!isTerminated && current < lowerT) {
