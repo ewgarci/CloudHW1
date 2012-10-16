@@ -123,11 +123,12 @@ public class Admin {
 		String keyName = "my_key2";
 		String zone = "us-east-1a";
 		String imageId = "ami-76f0061f";
-		String bucketName = "pblcluster";//pblcluster workcluster789";
+		String bucketName = "workcluster789";//pblcluster workcluster789";
 
 		createSecurityGroup(ec2, securityGroup);
 		createKey(keyName, ec2);
 		createBucket(s3, bucketName, zone);
+		createFileS3(s3, bucketName);
 		//setupAutoScale(autoScale, cloudWatch, keyName, zone, securityGroup, imageId);
 		//setupPolicy(autoScale, cloudWatch);
 
@@ -138,7 +139,7 @@ public class Admin {
 		
 		//For Auto Scaling
 		OnDemandAWS bob2 = new OnDemandAWS(keyName, securityGroup, zone, imageId, "bob-PC-2");
-
+	
 	
 		/*bob.createInstance();
 		alice.createInstance();
@@ -175,11 +176,13 @@ public class Admin {
 					createAndStartUpVM(vm, bucketName);
 				
 				
-				Thread.sleep(2*60*1000);
-				//Before increasing CPU ssh needs to be initialized. This takes a around 2 minutes after the cpu starts
-				System.out.println("Increase CPU");
-				increaseCPU(bob, keyName);
-				increaseCPU(alice, keyName);
+				if (days <= 1){
+					Thread.sleep(2*60*1000);
+					//Before increasing CPU ssh needs to be initialized. This takes a around 2 minutes after the cpu starts
+					System.out.println("Increase CPU");
+					increaseCPU(bob, keyName);
+					increaseCPU(alice, keyName);
+				}
 
 				System.out.println("All machines are created.");	
 				//Sleep for 30sec before pinging CloudWatch for the first time
@@ -196,6 +199,7 @@ public class Admin {
 				if(!bob2.getIsTerminated(false))
 					bob2.shutDownOnDemandAWS();
 				
+				
 				//We have reached maximum number of days
 				if (days > maxDays)
 					break;
@@ -209,7 +213,7 @@ public class Admin {
 			//See which machine is used a lot and try to auto-scale and which one is not used and kill it.
 			numberOfChecks++;
 			
-			if (numberOfChecks>3){
+			if ((days ==1) && (numberOfChecks>3)){
 				stopCPU(bob, keyName);
 				stopCPU(alice, keyName);
 			}
@@ -225,7 +229,8 @@ public class Admin {
 			//Auto-scale code
 			autoScale(bob2, getCPUUsage(cloudWatch, bob.instanceId));
 			
-			System.out.println("Check: " + numberOfChecks);
+			
+			System.out.println("Hour: " + numberOfChecks);
 
 			//Sleep for 30sec before pinging CloudWatch again
 			sleep(pingCW);
@@ -252,7 +257,7 @@ public class Admin {
 	//Checks if the CPU of a machine is idle
 	private static Boolean isIdle(AmazonCloudWatchClient cloudWatch, OnDemandAWS vm, double bound) {
 		if (vm.getIsTerminated(true)) return false;
-		
+		System.out.print(vm.machineName + ": ");
 		double p = getCPUUsage(cloudWatch, vm.instanceId);
 		if (p < 0) return false;
 		return p < bound;
@@ -276,7 +281,7 @@ public class Admin {
 		sleep(10);
 
 		machine.startUpOnDemandAWS();
-		System.out.println("Attach EBS");
+		System.out.println("Attach EBS " + machine.volumeId);
 		machine.attachEBS();
 		System.out.println("Attach S3");
 		machine.attachS3(bucketName);
@@ -369,6 +374,21 @@ public class Admin {
 	
 	}
 
+	public static void createFileS3(AmazonS3Client s3, String bucketName) throws IOException {
+        //set key
+        String key = "object-name.txt";
+        
+        //set value
+        File file = File.createTempFile("temp", ".txt");
+        //file.deleteOnExit();
+        Writer writer = new OutputStreamWriter(new FileOutputStream(file));
+        writer.write("This test file was read from S3!");
+        writer.close();
+        
+        //put object - bucket, key, value(file)
+        s3.putObject(new PutObjectRequest(bucketName, key, file));
+        System.out.println("Wrote object-name.txt to s3 bucket");
+	}
 
 	static void increaseCPU(OnDemandAWS pc, String keyName) throws InterruptedException{
 

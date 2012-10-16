@@ -92,7 +92,7 @@ public class OnDemandAWS {
 	public OnDemandAWS(String keyName, String securityGroup, String zone, String imageId, String machineName) throws IOException{
 		
 		credentials = new PropertiesCredentials(
-			 	awsStartup.class.getResourceAsStream("AwsCredentials.properties"));
+				OnDemandAWS.class.getResourceAsStream("AwsCredentials.properties"));
 		
 		ec2 = new AmazonEC2Client(credentials);
 		s3  = new AmazonS3Client(credentials);		
@@ -102,6 +102,7 @@ public class OnDemandAWS {
 		this.zone = zone;
 		this.imageId= imageId;
 		this.machineName= machineName;
+		this.createEBS(10);		
 	}
 	
 	public void createInstance() {
@@ -282,27 +283,18 @@ public class OnDemandAWS {
          ec2.detachVolume(dvr);
     }
 	
+    
+    
 	public void attachS3(String bucketName) throws IOException {
-        
-        
         //set key
         String key = "object-name.txt";
-        
-        //set value
-        File file = File.createTempFile("temp", ".txt");
-        //file.deleteOnExit();
-        Writer writer = new OutputStreamWriter(new FileOutputStream(file));
-        writer.write("This is a sample sentence.\r\nYes!");
-        writer.close();
-        
-        //put object - bucket, key, value(file)
-        s3.putObject(new PutObjectRequest(bucketName, key, file));
-        
+                
         //get object
         S3Object object = s3.getObject(new GetObjectRequest(bucketName, key));
         BufferedReader reader = new BufferedReader(
         	    new InputStreamReader(object.getObjectContent()));
         String dataS3 = null;
+        System.out.print(this.machineName + ":");
         while ((dataS3 = reader.readLine()) != null) {
             System.out.println(dataS3);
         }
